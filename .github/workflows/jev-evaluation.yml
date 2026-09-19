@@ -1,0 +1,113 @@
+name: JEV evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: JEV model to evaluate
+        required: true
+        default: jev-latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: Live JEV benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      JEV_MODEL: ${{ inputs.model }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Check JEV secret
+        shell: bash
+        run: |
+          if [ -z "$TYPESAFE_API_KEY" ]; then
+            echo "::error::Missing repository secret TYPESAFE_API_KEY"
+            echo "Add it under Settings → Secrets and variables → Actions → Repository secrets."
+            exit 1
+          fi
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install benchmark dependencies
+        run: npm --prefix benchmark install --ignore-scripts --no-audit --no-fund
+
+      - name: Run live JEV evaluation
+        run: node benchmark/run.mjs --jev
+
+      - name: Write benchmark summary
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f docs/benchmarks/jev-run.json ]; then
+            echo "## JEV evaluation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "No report was produced. Check the failed step above." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          node --input-type=module <<'JS' >> "$GITHUB_STEP_SUMMARY"
+          import { readFile } from 'node:fs/promises';
+
+          const report = JSON.parse(await readFile('docs/benchmarks/jev-run.json', 'utf8'));
+          const pct = value => value == null ? '—' : (value * 100).toFixed(2) + '%';
+          const ms = rows => {
+            const values = rows.filter(r => r.status === 'ok').map(r => r.elapsedMs);
+            return values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) + ' ms' : '—';
+          };
+          const sumUsage = rows => rows.reduce((acc, row) => {
+            const u = row.usage;
+            if (!u) return acc;
+            acc.requests += Number(u.requests || 0);
+            if (u.inputTokens != null) acc.inputTokens += Number(u.inputTokens);
+            else acc.inputKnown = false;
+            if (u.outputTokens != null) acc.outputTokens += Number(u.outputTokens);
+            else acc.outputKnown = false;
+            return acc;
+          }, { requests: 0, inputTokens: 0, outputTokens: 0, inputKnown: true, outputKnown: true });
+
+          const engines = ['mozilla-readability', 'jev-local-heuristic', 'jev-api'];
+          console.log('# JEV evaluation');
+          console.log('');
+          console.log('Model: `' + report.jev.requestedModel + '`  ');
+          console.log('Commit: `' + report.sourceCommit + '`  ');
+          console.log('Corpus: ' + report.corpus.pages + ' synthetic pages · ' + report.corpus.positiveAnchors + ' positive anchors · ' + report.corpus.negativeAnchors + ' negative anchors');
+          console.log('');
+          console.log('| Engine | Precision | Recall | F1 | Perfect pages | Mean elapsed/page |');
+          console.log('| --- | ---: | ---: | ---: | ---: | ---: |');
+          for (const engine of engines) {
+            const s = report.summary[engine];
+            const rows = report.rows.filter(r => r.engine === engine);
+            console.log('| ' + engine + ' | ' + pct(s?.precision) + ' | ' + pct(s?.recall) + ' | ' + pct(s?.f1) + ' | ' + (s?.perfect ?? '—') + ' / ' + (s?.total ?? '—') + ' | ' + ms(rows) + ' |');
+          }
+          const usage = sumUsage(report.rows.filter(r => r.engine === 'jev-api'));
+          console.log('');
+          console.log('### JEV usage reported by the API');
+          console.log('');
+          console.log('- Requests: **' + usage.requests + '**');
+          console.log('- Input tokens: **' + (usage.inputKnown ? usage.inputTokens : 'unknown') + '**');
+          console.log('- Output tokens: **' + (usage.outputKnown ? usage.outputTokens : 'unknown') + '**');
+          console.log('');
+          console.log('> This is a small synthetic development corpus, not a representative web benchmark. Timings include local DOM work and network/API latency and are diagnostic, not a controlled speed benchmark.');
+          JS
+
+      - name: Upload full benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jev-evaluation-${{ github.run_id }}
+          path: docs/benchmarks/jev-run.json
+          if-no-files-found: warn
+          retention-days: 30
