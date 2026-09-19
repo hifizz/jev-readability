@@ -1,0 +1,24 @@
+name: Extraction baseline
+on:
+  push:
+    branches: [main]
+    paths: ['benchmark/**', 'src/**', '.github/workflows/benchmark.yml']
+  pull_request:
+    paths: ['benchmark/**', 'src/**', '.github/workflows/benchmark.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm install --no-audit --no-fund
+      - run: npm --prefix benchmark install --ignore-scripts --no-audit --no-fund
+      - name: Run all synthetic cases (no model API calls)
+        run: node benchmark/run.mjs
