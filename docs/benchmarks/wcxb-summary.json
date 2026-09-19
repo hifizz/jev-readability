@@ -1,0 +1,48 @@
+{
+  "runId": 35464162174,
+  "runUrl": "https://github.com/hifizz/jev-readability/actions/runs/35464162174",
+  "dataset": {
+    "name": "WCXB v1.0",
+    "commit": "c039d5ee9f5a3a984a0e167e63aacd04e76e78a9",
+    "split": "test",
+    "availablePages": 511,
+    "selectedPages": 140,
+    "perType": 20,
+    "seed": "jev-readability-wcxb-v0.2"
+  },
+  "model": {
+    "requested": "jev-latest",
+    "returned": [
+      "jev-1.13.0"
+    ]
+  },
+  "usage": {
+    "requests": 888,
+    "requestBytes": 38351004,
+    "knownInputTokensMinimum": 10763941,
+    "knownOutputTokensMinimum": 1693934,
+    "pagesWithKnownTokenUsage": 136,
+    "successfulPagesWithUnknownTokenUsage": 3
+  },
+  "results": {
+    "readability": {
+      "wordPrecision": 0.8062434393518785,
+      "wordRecall": 0.7400735181242895,
+      "wordF1": 0.7268385417950222,
+      "anchorF1": 0.7912772585669782,
+      "errors": 0
+    },
+    "jev": {
+      "wordPrecision": 0.7298288990922117,
+      "wordRecall": 0.9499247716749406,
+      "wordF1": 0.7997238294717869,
+      "anchorF1": 0.9292929292929293,
+      "errors": 1
+    }
+  },
+  "failure": {
+    "id": "4351",
+    "type": "collection",
+    "error": "Page exceeds maxBlocks (500)"
+  }
+}
