@@ -6,9 +6,9 @@
 
 # jev-readability
 
-**让 JEV 判断哪些是正文，让代码保留原文。**
+**让 Agent 读网页，而不是让人进入阅读模式。**
 
-面向阅读模式、RAG 和 AI Agent 的 DOM-first TypeScript 库：把 HTML 切成不重叠的块，用 TypeSafe JEV 判断取舍，再从原始内容重组 **正文、HTML 和 Markdown**。模型只负责选择，不生成或改写文章。
+一个面向 **AI Agent 的语义内容提取器**。Mozilla Readability 的目标是把文章变成干净的 Reader View；jev-readability 的目标是跨文档、论坛、商品页、列表页和长页面，**尽量不漏掉 Agent 完成任务所需要的信息**。它先对 DOM 分块，再让 TypeSafe JEV 判断哪些内容该保留，最后从原始页面重组 **Markdown、正文和 HTML**——模型只做选择，不改写原文。
 
 [![CI](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml)
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
@@ -63,6 +63,54 @@ console.log(result.usage);
 保存为 `extract.mjs`，配置 `.env` 后执行 `node --env-file=.env extract.mjs`。离线基线使用 `{ strategy: 'heuristic' }`，模型概率保持 `null`。
 
 可选模式：`article`、`documentation`、`forum`、`product`、`agent`。没有页面类型信息时可显式使用 `agent`。**库的默认模式仍为 `article`**，不会因为示例改用 agent 而隐式改变已有调用。
+
+## 给 Mozilla Readability 用户
+
+如果你已经在用 `@mozilla/readability`，可以把迁移理解得非常简单：
+
+> **保留现有抓取 / 浏览器层，只替换“文章正文选择器”。从 article reader 变成 agent reader。**
+
+Readability 依然非常适合纯文章阅读。jev-readability 主要解决“正文”这个定义太窄的问题：API 文档、论坛回答、商品规格、列表项、警告、代码块等，对人类 Reader View 可能是噪声，对 Agent 却可能是关键上下文。
+
+### 原来：Readability
+
+```js
+import { Readability } from '@mozilla/readability';
+
+const article = new Readability(document.cloneNode(true)).parse();
+console.log(article.textContent);
+```
+
+### 迁移后：jev-readability
+
+```js
+import { extract } from 'jev-readability';
+
+const page = await extract(document, {
+  mode: 'agent',
+  classifier,
+});
+
+console.log(page.markdown);
+```
+
+外层架构不用推倒重来：
+
+```text
+fetch / Playwright / 浏览器
+        ↓
+     渲染后的 DOM
+        ↓
+Readability.parse()        → 干净文章
+        或
+jev-readability.extract()  → Agent-ready 语义 Markdown
+```
+
+**继续用 Readability：** 你做的是纯文章阅读，希望本地、零模型费用、内容尽量干净。
+
+**尝试 jev-readability：** 漏掉 Warning、论坛回复、规格表、代码示例、商品字段或列表项的代价，比多保留一点文本更高。
+
+最稳妥的迁移方式不是一次性替换：先在自己的真实页面上同时运行两套提取器，比较结果；文章阅读继续走 Readability，Agent / RAG ingestion 再逐步切到 jev-readability。
 
 ## 与 Mozilla Readability 对比
 
