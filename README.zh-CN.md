@@ -14,9 +14,27 @@
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
 
-[快速开始](#快速开始) · [Readability 对比](#与-mozilla-readability-对比) · [评测结果](#评测结果) · [大页面](#大页面) · [浏览器调用](#浏览器与扩展)
+[评测结果](#评测结果一览) · [快速开始](#快速开始) · [Readability 迁移](#给-mozilla-readability-用户) · [完整评测](#评测结果) · [大页面](#大页面)
 
 > **实验性开发版本。** 独立社区项目，非 Mozilla 或 TypeSafe 官方产品。最新 140 页 WCXB 对照使用真实 JEV，并保留了一次超时。结果仅适用于这批公开、已检查过的页面，不能泛化为所有网页的准确率承诺。
+
+## 评测结果一览
+
+**140 个真实 WCXB 网页 · 7 种页面类型 · 真实 JEV API 调用**
+
+| 引擎 | Word 精确率 | Word 召回率 | Word F1 | Anchor F1 |
+| --- | ---: | ---: | ---: | ---: |
+| Mozilla Readability `0.6.0` | **80.62%** | 74.01% | 72.68% | 79.13% |
+| JEV Typed | 72.86% | **94.93%** | 79.90% | 92.99% |
+| **JEV Generic `agent`** | 74.08% | 94.76% | **80.64%** | **93.01%** |
+
+**怎么理解这张表：** Readability 更“干净”，精确率更高，在纯文章页面上依然非常强；JEV 更偏向高召回，会尽量保留 benchmark 里真正需要的内容。对于 Agent，这意味着 Warning、论坛回复、规格表、代码块、列表项这类信息更不容易被误删，代价是可能多保留一些文本。
+
+Generic JEV **没有拿到外部提供的页面类型标签**，所有页面统一使用 `agent` 模式。在这批固定样本上，它的 Word F1 比 Readability 高 **7.95 个百分点**。按页面类型分层的配对 bootstrap 给出的 95% 区间为 **+3.49～+12.50 个百分点**。
+
+这**不代表 JEV 在所有网页上都更好**。这个数据集是公开且已经检查过的；七种页面类型被等权采样，不代表真实互联网分布；Typed 模式有一次超时；JEV 的网络延迟和模型费用也明显高于纯本地 Readability。单看文章页，本轮仍是 Readability 更高：**97.12% vs 94.92% Word F1**。
+
+[查看完整评测报告](./docs/WCXB_BENCHMARK.md) · [140 页逐页分数](./docs/benchmarks/wcxb-ablation-pages.tsv) · [汇总 JSON](./docs/benchmarks/wcxb-ablation-summary.json) · [GitHub Actions 原始运行](https://github.com/hifizz/jev-readability/actions/runs/35465401579)
 
 ## 快速开始
 
