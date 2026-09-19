@@ -1,0 +1,38 @@
+name: Publish to npm
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'hifizz/jev-readability'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      - name: Require matching version tag
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (process.env.GITHUB_REF_NAME !== `v${pkg.version}`) throw new Error('Tag does not match package.json version');
+          JS
+      - name: Ensure npm supports trusted publishing
+        run: npm install --global npm@11
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm install --no-save --package-lock=false linkedom@0.18.12
+      - run: npm run test:node
+      - run: npm pack --dry-run
+      - name: Publish using npm Trusted Publishing
+        run: npm publish --access public

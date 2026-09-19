@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><title>API reference</title></head><body>
+<nav><a href="/intro">Overview</a><a href="/api">API</a><a href="/faq">FAQ</a></nav>
+<main><h1>Extraction API</h1><p>Use the library to extract source content without asking a model to rewrite it. The classification result selects existing blocks.</p>
+<h2>Install</h2><pre><code class="language-bash">npm install ./jev-readability-0.1.0.tgz linkedom</code></pre>
+<h2>Reference links</h2><ul><li><a href="/api/extract">extract()</a></li><li><a href="/api/prepare">prepare()</a></li><li><a href="/api/finalize">finalize()</a></li></ul>
+<aside class="note"><p>Important: your API key belongs on the server, not inside a browser bundle.</p></aside>
+<h2>Options</h2><table><tr><th>Option</th><th>Meaning</th></tr><tr><td>mode</td><td>Controls the extraction policy.</td></tr><tr><td>strategy</td><td>Explicit local baseline or model classifier.</td></tr></table>
+<div>Direct introductory text before a nested block.<p>The nested paragraph must appear exactly once.</p>Direct closing text after the nested block.</div>
+</main><footer>Privacy and terms</footer></body></html>

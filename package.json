@@ -1,0 +1,54 @@
+{
+  "name": "jev-readability",
+  "version": "0.1.0",
+  "description": "DOM-first content extraction with batched TypeSafe Jev decisions",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./jev": {
+      "types": "./dist/jev.d.ts",
+      "import": "./dist/jev.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "examples/extract-file.mjs",
+    "README.md",
+    "docs/GUIDE.md",
+    "docs/PUBLISHING.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "demo": "node --env-file-if-exists=.env examples/server.mjs",
+    "test:browser": "python test/run-browser.py",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm run build && npm test",
+    "test:node": "node test/node.integration.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "devDependencies": { "typescript": "5.8.3" },
+  "peerDependencies": { "linkedom": ">=0.18.12 <1" },
+  "peerDependenciesMeta": { "linkedom": { "optional": true } },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/hifizz/jev-readability.git" },
+  "homepage": "https://github.com/hifizz/jev-readability#readme",
+  "bugs": { "url": "https://github.com/hifizz/jev-readability/issues" },
+  "keywords": ["readability", "content-extraction", "html", "markdown", "jev", "typesafe", "dom", "rag", "ai-agent"],
+  "sideEffects": false,
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
+  "bin": { "jev-readability": "./examples/extract-file.mjs" }
+}

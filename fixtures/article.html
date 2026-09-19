@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>让网页正文回到阅读中 | 工程笔记</title>
+  <meta name="author" content="示例作者">
+  <meta property="article:published_time" content="2026-09-20">
+</head>
+<body>
+  <nav><a href="/">首页</a> / <a href="/news">资讯</a> / <a href="/products">产品</a> / <a href="/login">登录</a></nav>
+  <main>
+    <article>
+      <h1>让网页正文回到阅读中</h1>
+      <p>一个网页里，真正想读的内容往往只占一小部分。菜单、广告、推荐文章与正文混在一起，让阅读器和搜索代理都需要先回答一个问题：哪些内容应该留下？</p>
+      <h2>先分块</h2>
+      <p>先按 DOM 结构把网页切成互不重叠的内容块。保留短标题、代码、列表和表格，而不是简单地认为“文字少的内容都没有价值”。每一个内容块都拥有稳定的本次提取 ID。</p>
+      <h2>再判断</h2>
+      <p>分类器只负责判断，不负责改写。它可以决定某一块是正文、导航、评论还是广告，最终输出仍然来自原始页面，而不是由模型重新生成。</p>
+      <pre><code class="language-typescript">const result = await extract(html, {
+  mode: 'article',
+});
+console.log(result.markdown);</code></pre>
+      <h2>保留结构</h2>
+      <table>
+        <thead><tr><th>内容</th><th>处理方式</th></tr></thead>
+        <tbody><tr><td>短标题</td><td>作为候选保留</td></tr><tr><td>代码与表格</td><td>保持原有内容</td></tr><tr><td>导航与广告</td><td>由规则或模型判别</td></tr></tbody>
+      </table>
+      <p>还需要检查原文是否被遗漏，并区分本地规则与真实模型的测试结果。这个示例是人为构造的功能测试页面，不是准确率评测数据集。<a href="/guide">查看提取指南</a>。</p>
+    </article>
+    <aside class="related"><h2>你可能还喜欢</h2><p><a href="/promo">十个你不能错过的效率工具，现在订阅获得优惠。</a></p></aside>
+    <section class="comments"><h2>读者评论</h2><p>这条评论讨论了文章，但 article 模式默认不保留读者讨论；forum 模式可以保留它。</p></section>
+  </main>
+  <div class="cookie-banner"><p>我们使用 Cookie。接受全部 / 管理偏好。</p></div>
+  <div class="advertisement"><p>推广信息：立即加入付费课程，领取特别优惠。</p></div>
+  <p hidden>不应该出现在结果里的隐藏信息。</p>
+  <footer><p>示例网站 © 2026。隐私政策 · 服务条款 · 联系我们</p></footer>
+  <script>window.__unsafe_script_executed = true;</script>
+</body>
+</html>

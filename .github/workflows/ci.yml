@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm install --no-save --package-lock=false linkedom@0.18.12
+      - run: npm run test:node
+      - run: npm pack --dry-run
+      - name: Report registry publication status (read-only)
+        run: |
+          node --input-type=module <<'JS'
+          const response = await fetch('https://registry.npmjs.org/jev-readability');
+          if (response.status === 404) console.log('REGISTRY_STATUS: no published package (HTTP 404)');
+          else if (response.ok) {
+            const pkg = await response.json();
+            console.log('REGISTRY_STATUS:', JSON.stringify({name:pkg.name, latest:pkg['dist-tags']?.latest}));
+          } else throw new Error(`Registry query failed with HTTP ${response.status}; package availability unknown`);
+          JS
