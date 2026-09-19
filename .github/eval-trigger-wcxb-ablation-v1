@@ -1,0 +1,4 @@
+User-authorized one-shot paired evaluation on the existing 140-page cohort.
+Pinned model: jev-1.13.0. Variants: typed,generic. Large-page regions enabled.
+Global budget: 2400 HTTP attempts; 120000000 JSON request bytes.
+Do not modify this marker to schedule routine or recurring paid runs.

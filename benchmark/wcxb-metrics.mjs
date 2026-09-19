@@ -24,7 +24,7 @@ export function anchorScore(text, gt) {
   const tp = gt.with.filter(t => output.includes(normalize(t))).length;
   const fn = gt.with.length - tp;
   const fp = gt.without.filter(t => output.includes(normalize(t))).length;
-  return { tp, fp, fn, precision: tp + fp ? tp / (tp + fp) : null, recall: tp + fn ? tp / (tp + fn) : null, f1: 2 * tp + fp + fn ? 2 * tp / (2 * tp + fp + fn) : null, perfect: fn === 0 && fp === 0 };
+  return { tp, fp, fn, precision: tp + fp ? tp / (tp + fp) : null, recall: tp + fn ? tp / (tp + fn) : null, f1: 2 * tp + fp + fn ? 2 * tp / (2 * tp + fp + fn) : null, perfect: gt.with.length + gt.without.length > 0 && fn === 0 && fp === 0 };
 }
 export function aggregate(rows) {
   if (!rows.length) throw new Error('Cannot aggregate an empty cohort');

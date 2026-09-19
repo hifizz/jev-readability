@@ -58,10 +58,12 @@ if (seed === SEED && perType === 20 && selectionHash !== CANONICAL) throw new Er
 for (const item of selected) {
   if (!/^\d+$/.test(item.id)) throw new Error('Unsafe dataset ID');
   const gt = item.data.ground_truth;
-  if (!gt || typeof gt.main_content !== 'string' || !gt.main_content.trim() || !Array.isArray(gt.with) || !Array.isArray(gt.without) || [...gt.with, ...gt.without].some(s => typeof s !== 'string' || !s.trim())) throw new Error('Invalid ground truth: ' + item.id);
+  if (!gt || (typeof gt.main_content !== 'string' && !(gt.main_content === null && item.data._internal?.unextractable === true)) || !Array.isArray(gt.with) || !Array.isArray(gt.without) || [...gt.with, ...gt.without].some(s => typeof s !== 'string' || !s.trim())) throw new Error('Invalid ground truth: ' + item.id);
   const compressed = await readFile(join(htmlDir, item.id + '.html.gz'));
   item.html = gunzipSync(compressed, { maxOutputLength: 16_000_000 }).toString('utf8');
   item.htmlHash = sha(item.html);
+  item.reference = gt.main_content ?? '';
+  item.emptyReference = !item.reference.trim();
 }
 const engineFor = v => v === 'typed' ? 'jev-api' : 'jev-generic';
 const engines = ['mozilla-readability', ...variants.map(engineFor)];
@@ -72,12 +74,12 @@ const report = {
   sourceCommit: process.env.GITHUB_SHA || null,
   runUrl: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
   versions: { node: process.version, readability: require('@mozilla/readability/package.json').version, jsdom: require('jsdom/package.json').version },
-  dataset: { name: 'WCXB v1.0', repository: 'Murrough-Foley/web-content-extraction-benchmark', commit: PIN, split: 'test', availablePages: records.length, selectedPages: selected.length, perType, seed, types: TYPES, selectionHash },
+  dataset: { name: 'WCXB v1.0', repository: 'Murrough-Foley/web-content-extraction-benchmark', commit: PIN, split: 'test', availablePages: records.length, selectedPages: selected.length, emptyReferenceIds: selected.filter(r => r.emptyReference).map(r => r.id), perType, seed, types: TYPES, selectionHash },
   evaluation: { variants, requestedModel: live ? model : null, largePages, modeMapping: MODES, wordMetric: 'macro per-page bag-of-words P/R/F1; failed and unrun pages score zero', anchorMetric: 'micro with/without substring matches after NFKC and whitespace removal',
     config: { maxPageBlocks: largePages ? 5000 : 500, regionBlocks: largePages ? 500 : null, pageRequests: jevOptions.maxRequests, batchBlocks: 24, includeRoles: true, sampleCharacters: 1800, keepThreshold: .5, uncertaintyMargin: .15, onUncertain: 'keep' },
-    caveats: ['Balanced by seven types, not web-prevalence weighted.', 'Public test pages previously examined; this cohort is no longer an untouched holdout.', 'Typed receives a page-type label. Generic always uses agent; no supplied type label is serialized.', 'One execution per engine/page; timings are diagnostic and not a controlled speed benchmark.', 'No threshold/prompt tuning after observing this run.'] },
+    caveats: ['Balanced by seven types, not web-prevalence weighted.', 'Public test pages previously examined; this cohort is no longer an untouched holdout.', 'Typed receives a page-type label. Generic always uses agent; no supplied type label is serialized.', 'One execution per engine/page; timings are diagnostic and not a controlled speed benchmark.', 'No threshold/prompt tuning after observing this run.', 'Two SPA gold references are empty/null; all-140 uses the historical empty-target convention, with a separate nonempty-reference sensitivity view.'] },
   sourceHashes: Object.fromEntries(await Promise.all(['src/dom.ts', 'src/render.ts', 'src/index.ts', 'src/jev.ts', 'src/regions.ts', 'src/types.ts', 'benchmark/wcxb-run.mjs', 'benchmark/wcxb-metrics.mjs', 'benchmark/meter.mjs'].map(async f => [f, sha(await readFile(f))]))),
-  selected: selected.map(({ id, type, data, htmlHash, goldHash }) => ({ id, type, url: data.url, htmlHash, goldHash })),
+  selected: selected.map(({ id, type, data, htmlHash, goldHash, emptyReference }) => ({ id, type, url: data.url, htmlHash, goldHash, emptyReference })),
   limits: meter.limits, usage: {}, summaries: {}, paired: [], rows,
 };
 await mkdir('docs/benchmarks', { recursive: true });
@@ -122,7 +124,7 @@ for (const [index, item] of selected.entries()) {
     } finally { dom?.window.close(); }
     const after = meter.snapshot(engine);
     rows.push({ id: item.id, type: item.type, engine, variant, mode, status, error, regions, elapsedMs: Number((performance.now() - started).toFixed(1)),
-      word: wordScore(text, item.data.ground_truth.main_content), anchor: anchorScore(text, item.data.ground_truth),
+      emptyReference: item.emptyReference, word: wordScore(text, item.reference), anchor: anchorScore(text, item.data.ground_truth),
       outputCharacters: text.length, outputHash: sha(text), stats: result?.stats || null, warnings: result?.warnings || [], usage: result?.usage || null,
       attempts: after.requests - before.requests, knownInputTokens: after.knownInputTokens - before.knownInputTokens, knownOutputTokens: after.knownOutputTokens - before.knownOutputTokens,
       responsesMissingInputUsage: after.responsesMissingInputUsage - before.responsesMissingInputUsage, responsesMissingOutputUsage: after.responsesMissingOutputUsage - before.responsesMissingOutputUsage });
@@ -132,7 +134,7 @@ for (const [index, item] of selected.entries()) {
 }
 for (const engine of engines) {
   const er = rows.filter(r => r.engine === engine);
-  report.summaries[engine] = { overall: aggregate(er), byType: Object.fromEntries(TYPES.map(t => [t, aggregate(er.filter(r => r.type === t))])) };
+  report.summaries[engine] = { overall: aggregate(er), nonEmptyReference: aggregate(er.filter(r => !r.emptyReference)), byType: Object.fromEntries(TYPES.map(t => [t, aggregate(er.filter(r => r.type === t))])) };
 }
 if (!rows.some(r => r.status === 'not_run')) {
   for (const e of engines.slice(1)) report.paired.push(pairedBootstrap(rows, e, 'mozilla-readability'));
