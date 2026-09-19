@@ -1,234 +1,145 @@
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { createHash } from 'node:crypto';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdir, writeFile, rename } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { extract } from '../dist/index.js';
-import { createJevClassifier } from '../dist/jev.js';
+import { createJevClassifier, buildJevPlan } from '../dist/jev.js';
+import { TYPES, MODES, modeFor, wordScore, anchorScore, aggregate, pairedBootstrap } from './wcxb-metrics.mjs';
+import { createMeter } from './meter.mjs';
 
-const argv = process.argv.slice(2);
-const getArg = (name, fallback = null) => {
-  const i = argv.indexOf(name);
-  return i >= 0 ? argv[i + 1] : fallback;
-};
-const live = argv.includes('--jev');
-const datasetDir = getArg('--dataset', 'wcxb/test');
-const perType = Number(getArg('--per-type', '20'));
-const seed = getArg('--seed', 'jev-readability-wcxb-v0.2');
-if (!Number.isSafeInteger(perType) || perType < 1 || perType > 25) throw new Error('--per-type must be an integer from 1 to 25');
-if (live && !process.env.TYPESAFE_API_KEY) throw new Error('--jev requires TYPESAFE_API_KEY');
-const model = process.env.JEV_MODEL || 'jev-latest';
-
-const TYPES = ['article', 'documentation', 'forum', 'product', 'service', 'listing', 'collection'];
-const MODE = {
-  article: 'article',
-  documentation: 'documentation',
-  forum: 'forum',
-  product: 'product',
-  service: 'agent',
-  listing: 'agent',
-  collection: 'agent',
-};
-
-const hash = value => createHash('sha256').update(value).digest('hex');
-const tokenize = text => (text.toLocaleLowerCase().match(/[\p{L}\p{N}_]+/gu) || []);
-function multiset(tokens) {
-  const map = new Map();
-  for (const t of tokens) map.set(t, (map.get(t) || 0) + 1);
-  return map;
+const PIN = 'c039d5ee9f5a3a984a0e167e63aacd04e76e78a9';
+const SEED = 'jev-readability-wcxb-v0.2';
+const CANONICAL = '79d02e092b2fd1a19ec9e60ae5b33dd576cd8cc92a4543aeef988e2bce01add2';
+const sha = x => createHash('sha256').update(x).digest('hex');
+const args = new Map();
+const booleanFlags = new Set(['--jev', '--large-pages']);
+const valueFlags = new Set(['--dataset', '--per-type', '--seed', '--variants', '--max-requests', '--max-bytes']);
+for (let i = 2; i < process.argv.length; i++) {
+  const arg = process.argv[i];
+  if (args.has(arg)) throw new Error('Duplicate option: ' + arg);
+  if (booleanFlags.has(arg)) args.set(arg, true);
+  else if (valueFlags.has(arg) && process.argv[i + 1] && !process.argv[i + 1].startsWith('--')) args.set(arg, process.argv[++i]);
+  else throw new Error('Unknown option or missing value: ' + arg);
 }
-function wordScore(predicted, reference) {
-  const p = multiset(tokenize(predicted));
-  const r = multiset(tokenize(reference));
-  const pN = [...p.values()].reduce((a, b) => a + b, 0);
-  const rN = [...r.values()].reduce((a, b) => a + b, 0);
-  if (!rN) return { precision: pN ? 0 : 1, recall: 1, f1: pN ? 0 : 1, overlap: 0, predictedWords: pN, referenceWords: rN };
-  if (!pN) return { precision: 0, recall: 0, f1: 0, overlap: 0, predictedWords: 0, referenceWords: rN };
-  let overlap = 0;
-  for (const [word, count] of p) overlap += Math.min(count, r.get(word) || 0);
-  const precision = overlap / pN;
-  const recall = overlap / rN;
-  const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
-  return { precision, recall, f1, overlap, predictedWords: pN, referenceWords: rN };
-}
-const normalize = value => String(value || '').normalize('NFKC').replace(/\s+/gu, '');
-function anchorScore(predicted, gt) {
-  const out = normalize(predicted);
-  const withList = Array.isArray(gt.with) ? gt.with : [];
-  const withoutList = Array.isArray(gt.without) ? gt.without : [];
-  const includes = s => out.includes(normalize(s));
-  const tp = withList.filter(includes).length;
-  const fn = withList.length - tp;
-  const fp = withoutList.filter(includes).length;
-  const precision = tp + fp ? tp / (tp + fp) : null;
-  const recall = tp + fn ? tp / (tp + fn) : null;
-  const f1 = precision != null && recall != null && precision + recall ? 2 * precision * recall / (precision + recall) : 0;
-  return { tp, fp, fn, precision, recall, f1, perfect: fn === 0 && fp === 0 };
-}
-function average(rows, path) {
-  const vals = rows.map(r => path(r)).filter(Number.isFinite);
-  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-}
-function aggregate(rows) {
-  const ok = rows.filter(r => r.status === 'ok');
-  let aTp = 0, aFp = 0, aFn = 0;
-  for (const row of rows) {
-    aTp += row.anchor?.tp || 0; aFp += row.anchor?.fp || 0; aFn += row.anchor?.fn || 0;
-  }
-  const ap = aTp + aFp ? aTp / (aTp + aFp) : null;
-  const ar = aTp + aFn ? aTp / (aTp + aFn) : null;
-  const af = ap != null && ar != null && ap + ar ? 2 * ap * ar / (ap + ar) : 0;
-  return {
-    pages: rows.length,
-    completed: ok.length,
-    errors: rows.length - ok.length,
-    meanWordPrecision: average(ok, r => r.word.precision),
-    meanWordRecall: average(ok, r => r.word.recall),
-    meanWordF1: average(ok, r => r.word.f1),
-    anchorPrecision: ap,
-    anchorRecall: ar,
-    anchorF1: af,
-    perfectAnchors: rows.filter(r => r.status === 'ok' && r.anchor.perfect).length,
-    meanElapsedMs: average(ok, r => r.elapsedMs),
-  };
-}
-
-const gtDir = join(datasetDir, 'ground-truth');
-const htmlDir = join(datasetDir, 'html');
+const integer = (value, min, max) => { const n = Number(value); if (!Number.isSafeInteger(n) || n < min || n > max) throw new Error(`Expected integer ${min}..${max}`); return n; };
+const live = args.has('--jev'), largePages = args.has('--large-pages');
+const datasetDir = args.get('--dataset') || 'wcxb-repo/test';
+const perType = integer(args.get('--per-type') || 20, 1, 25), seed = args.get('--seed') || SEED;
+const variants = live ? String(args.get('--variants') || 'typed').split(',') : [];
+if (new Set(variants).size !== variants.length || variants.some(v => !['typed', 'generic'].includes(v))) throw new Error('Variants must be typed and/or generic');
+const model = process.env.JEV_MODEL || 'jev-1.13.0';
+if (!/^jev-(?:\d+\.\d+\.\d+|latest|preview)$/.test(model)) throw new Error('Invalid JEV model');
+if (live && !process.env.TYPESAFE_API_KEY?.trim()) throw new Error('TYPESAFE_API_KEY is required');
+const actualPin = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dirname(datasetDir), encoding: 'utf8' }).trim();
+if (actualPin !== PIN) throw new Error('Dataset must be checked out at the pinned WCXB revision');
+const meter = createMeter({ maxRequests: integer(args.get('--max-requests') || 2400, 1, 5000), maxBytes: integer(args.get('--max-bytes') || 120_000_000, 1, 250_000_000), expectedModel: /^jev-\d/.test(model) ? model : undefined });
+const jevOptions = { apiKey: process.env.TYPESAFE_API_KEY || '', model, fetch: meter.fetch, concurrency: 2, maxRequests: largePages ? 128 : 64, timeoutMs: 30_000, totalTimeoutMs: 120_000, maxRetries: 2, ...(largePages ? { largePage: { maxBlocks: 5000, regionBlocks: 500 } } : {}) };
+const classifier = live ? createJevClassifier(jevOptions) : null;
+const gtDir = join(datasetDir, 'ground-truth'), htmlDir = join(datasetDir, 'html');
 const files = (await readdir(gtDir)).filter(f => f.endsWith('.json')).sort();
 const records = [];
 for (const file of files) {
-  const data = JSON.parse(await readFile(join(gtDir, file), 'utf8'));
-  const type = data?._internal?.page_type?.primary;
-  if (!TYPES.includes(type)) continue;
-  records.push({ file, id: String(data.file_id || file.replace(/\.json$/, '')), type, data });
+  const raw = await readFile(join(gtDir, file), 'utf8'), data = JSON.parse(raw);
+  const type = data?._internal?.page_type?.primary, id = String(data.file_id || file.replace(/\.json$/, ''));
+  if (TYPES.includes(type)) records.push({ id, type, data, goldHash: sha(raw) });
 }
-const selected = [];
-for (const type of TYPES) {
-  const pool = records.filter(r => r.type === type)
-    .map(r => ({ ...r, rank: hash(seed + ':' + type + ':' + r.id) }))
-    .sort((a, b) => a.rank.localeCompare(b.rank));
-  if (pool.length < perType) throw new Error(`WCXB test split has only ${pool.length} ${type} pages; requested ${perType}`);
-  selected.push(...pool.slice(0, perType));
-}
-
-const classifier = live ? createJevClassifier({
-  apiKey: process.env.TYPESAFE_API_KEY,
-  model,
-  concurrency: 2,
-  maxRequests: 64,
-  timeoutMs: 30_000,
-  totalTimeoutMs: 120_000,
-  maxRetries: 2,
-}) : null;
-const engines = ['mozilla-readability', ...(live ? ['jev-api'] : [])];
-const rows = [];
-let index = 0;
+const selected = TYPES.flatMap(type => {
+  const pool = records.filter(r => r.type === type).map(r => ({ ...r, rank: sha(seed + ':' + type + ':' + r.id) })).sort((a, b) => a.rank.localeCompare(b.rank));
+  if (pool.length < perType) throw new Error('Insufficient pages for type ' + type);
+  return pool.slice(0, perType);
+});
+const selectionHash = sha(JSON.stringify(selected.map(({ id, type }) => ({ id, type }))));
+if (seed === SEED && perType === 20 && selectionHash !== CANONICAL) throw new Error('Selection differs from the original 140-page cohort');
+// Preflight every file/annotation before spending any model quota. Gold never enters classifier input.
 for (const item of selected) {
-  index++;
-  const gt = item.data.ground_truth || {};
-  const htmlPath = join(htmlDir, item.id + '.html.gz');
-  const html = gunzipSync(await readFile(htmlPath)).toString('utf8');
-  for (const engine of engines) {
-    const started = performance.now();
-    let text = '', result = null, status = 'ok', error = null;
-    const dom = new JSDOM(html, { url: item.data.url || 'https://example.invalid/' + item.id });
-    try {
-      if (engine === 'mozilla-readability') {
-        text = new Readability(dom.window.document).parse()?.textContent || '';
-      } else {
-        result = await extract(dom.window.document, {
-          url: item.data.url || undefined,
-          mode: MODE[item.type],
-          classifier,
-          maxHtmlCharacters: 8_000_000,
-          maxElements: 100_000,
-          maxBlocks: 500,
-          maxDepth: 150,
-        });
-        text = result.text;
-      }
-    } catch (caught) {
-      status = 'error';
-      error = caught instanceof Error ? `${caught.name}: ${caught.message}` : String(caught);
-      text = '';
-    } finally {
-      dom.window.close();
-    }
-    const elapsedMs = Number((performance.now() - started).toFixed(1));
-    const row = {
-      id: item.id,
-      type: item.type,
-      mode: engine === 'jev-api' ? MODE[item.type] : null,
-      url: item.data.url || null,
-      engine,
-      status,
-      error,
-      elapsedMs,
-      word: wordScore(text, gt.main_content || ''),
-      anchor: anchorScore(text, gt),
-      outputCharacters: text.length,
-      usage: result?.usage || (engine === 'mozilla-readability' ? { requests: 0, inputTokens: null, outputTokens: null } : null),
-    };
-    rows.push(row);
-  }
-  console.log(`[${index}/${selected.length}] ${item.id} ${item.type} done`);
+  if (!/^\d+$/.test(item.id)) throw new Error('Unsafe dataset ID');
+  const gt = item.data.ground_truth;
+  if (!gt || typeof gt.main_content !== 'string' || !gt.main_content.trim() || !Array.isArray(gt.with) || !Array.isArray(gt.without) || [...gt.with, ...gt.without].some(s => typeof s !== 'string' || !s.trim())) throw new Error('Invalid ground truth: ' + item.id);
+  const compressed = await readFile(join(htmlDir, item.id + '.html.gz'));
+  item.html = gunzipSync(compressed, { maxOutputLength: 16_000_000 }).toString('utf8');
+  item.htmlHash = sha(item.html);
 }
-
-const summaries = {};
-for (const engine of engines) {
-  const engineRows = rows.filter(r => r.engine === engine);
-  summaries[engine] = {
-    overall: aggregate(engineRows),
-    byType: Object.fromEntries(TYPES.map(type => [type, aggregate(engineRows.filter(r => r.type === type))])),
-  };
-}
-const usageRows = rows.filter(r => r.engine === 'jev-api' && r.usage);
-const usage = {
-  requests: usageRows.reduce((n, r) => n + Number(r.usage.requests || 0), 0),
-  inputTokens: usageRows.every(r => r.usage.inputTokens != null) ? usageRows.reduce((n, r) => n + Number(r.usage.inputTokens), 0) : null,
-  outputTokens: usageRows.every(r => r.usage.outputTokens != null) ? usageRows.reduce((n, r) => n + Number(r.usage.outputTokens), 0) : null,
-  requestBytes: usageRows.reduce((n, r) => n + Number(r.usage.requestBytes || 0), 0),
-  models: [...new Set(usageRows.flatMap(r => r.usage.models || []))],
-};
-
+const engineFor = v => v === 'typed' ? 'jev-api' : 'jev-generic';
+const engines = ['mozilla-readability', ...variants.map(engineFor)];
+const rows = [];
+const require = createRequire(import.meta.url);
 const report = {
-  schemaVersion: 2,
-  generatedAt: new Date().toISOString(),
+  schemaVersion: 3, status: 'running', generatedAt: new Date().toISOString(),
   sourceCommit: process.env.GITHUB_SHA || null,
   runUrl: process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null,
-  dataset: {
-    name: 'WCXB v1.0',
-    repository: 'Murrough-Foley/web-content-extraction-benchmark',
-    commit: 'c039d5ee9f5a3a984a0e167e63aacd04e76e78a9',
-    split: 'test',
-    availablePages: 511,
-    selectedPages: selected.length,
-    perType,
-    seed,
-    types: TYPES,
-    selection: 'SHA-256 rank within each page type; first N per type',
-  },
-  evaluation: {
-    wordMetric: 'macro mean per-page bag-of-words precision/recall/F1 against ground_truth.main_content',
-    anchorMetric: 'micro with/without anchor precision/recall/F1',
-    readability: '@mozilla/readability 0.6.0 defaults',
-    jev: live ? { status: 'executed', requestedModel: model, modeMapping: MODE } : { status: 'not_run' },
-    caveats: [
-      'WCXB test labels are public; this is a reproducible external benchmark, not a secret blind test.',
-      'JEV receives the WCXB page type through a deterministic mode mapping; Readability has no task-mode input.',
-      'service/listing/collection map to the generic agent mode because v0.1 has no dedicated modes.',
-      'Failures remain in the denominator with zero text scores.',
-    ],
-  },
-  usage,
-  summaries,
-  selected: selected.map(x => ({ id: x.id, type: x.type, url: x.data.url || null })),
-  rows,
+  versions: { node: process.version, readability: require('@mozilla/readability/package.json').version, jsdom: require('jsdom/package.json').version },
+  dataset: { name: 'WCXB v1.0', repository: 'Murrough-Foley/web-content-extraction-benchmark', commit: PIN, split: 'test', availablePages: records.length, selectedPages: selected.length, perType, seed, types: TYPES, selectionHash },
+  evaluation: { variants, requestedModel: live ? model : null, largePages, modeMapping: MODES, wordMetric: 'macro per-page bag-of-words P/R/F1; failed and unrun pages score zero', anchorMetric: 'micro with/without substring matches after NFKC and whitespace removal',
+    config: { maxPageBlocks: largePages ? 5000 : 500, regionBlocks: largePages ? 500 : null, pageRequests: jevOptions.maxRequests, batchBlocks: 24, includeRoles: true, sampleCharacters: 1800, keepThreshold: .5, uncertaintyMargin: .15, onUncertain: 'keep' },
+    caveats: ['Balanced by seven types, not web-prevalence weighted.', 'Public test pages previously examined; this cohort is no longer an untouched holdout.', 'Typed receives a page-type label. Generic always uses agent; no supplied type label is serialized.', 'One execution per engine/page; timings are diagnostic and not a controlled speed benchmark.', 'No threshold/prompt tuning after observing this run.'] },
+  sourceHashes: Object.fromEntries(await Promise.all(['src/dom.ts', 'src/render.ts', 'src/index.ts', 'src/jev.ts', 'src/regions.ts', 'src/types.ts', 'benchmark/wcxb-run.mjs', 'benchmark/wcxb-metrics.mjs', 'benchmark/meter.mjs'].map(async f => [f, sha(await readFile(f))]))),
+  selected: selected.map(({ id, type, data, htmlHash, goldHash }) => ({ id, type, url: data.url, htmlHash, goldHash })),
+  limits: meter.limits, usage: {}, summaries: {}, paired: [], rows,
 };
-
 await mkdir('docs/benchmarks', { recursive: true });
 const out = live ? 'docs/benchmarks/wcxb-jev-run.json' : 'docs/benchmarks/wcxb-readability-run.json';
-await writeFile(out, JSON.stringify(report, null, 2) + '\n');
-console.log('WCXB_SUMMARY:' + JSON.stringify({ dataset: report.dataset, usage, summaries }));
+async function checkpoint() {
+  report.usage = { ...meter.snapshot(), perEngine: Object.fromEntries(engines.filter(e => e !== 'mozilla-readability').map(e => [e, meter.snapshot(e)])) };
+  await writeFile(out + '.tmp', JSON.stringify(report, null, 2) + '\n'); await rename(out + '.tmp', out);
+}
+await checkpoint();
+let circuit = null, consecutiveErrors = 0;
+for (const [index, item] of selected.entries()) {
+  // Alternate typed/generic ordering without consulting labels or gold scores.
+  const order = parseInt(sha(seed + ':order:' + item.id).slice(0, 2), 16) % 2 ? [...variants].reverse() : variants;
+  for (const engine of ['mozilla-readability', ...order.map(engineFor)]) {
+    const variant = engine === 'jev-api' ? 'typed' : engine === 'jev-generic' ? 'generic' : null;
+    const mode = variant ? modeFor(variant, item.type) : null;
+    const started = performance.now();
+    let dom, result, text = '', status = 'ok', error = null, regions = null;
+    const before = meter.snapshot(engine);
+    try {
+      if (variant && circuit) { status = 'not_run'; throw new Error(circuit); }
+      dom = new JSDOM(item.html, { url: item.data.url || 'https://example.invalid/', virtualConsole: new VirtualConsole() });
+      if (!variant) text = new Readability(dom.window.document).parse()?.textContent || '';
+      else {
+        meter.setScope(engine);
+        result = await extract(dom.window.document, {
+          url: item.data.url, mode, maxHtmlCharacters: 8_000_000, maxElements: 100_000, maxDepth: 150, maxBlocks: largePages ? 5000 : 500,
+          classifier: async (input, runtime) => { regions = buildJevPlan(input, jevOptions).regions; return classifier(input, runtime); },
+        });
+        text = result.text;
+        consecutiveErrors = 0;
+      }
+    } catch (caught) {
+      if (status !== 'not_run') status = 'error';
+      const message = caught instanceof Error ? `${caught.name}: ${caught.message}` : 'UnknownError';
+      error = message.replaceAll(process.env.TYPESAFE_API_KEY || '\u0000', '[redacted]').replace(/[\r\n]/g, ' ').slice(0, 300);
+      text = '';
+      if (variant && status === 'error') {
+        consecutiveErrors++;
+        if (['BudgetError', 'ModelMismatchError'].includes(caught?.name) || [401, 402, 403, 404, 422].includes(caught?.status) || consecutiveErrors >= 3) circuit = 'JEV circuit stopped after fatal error/budget or three consecutive failures';
+      }
+    } finally { dom?.window.close(); }
+    const after = meter.snapshot(engine);
+    rows.push({ id: item.id, type: item.type, engine, variant, mode, status, error, regions, elapsedMs: Number((performance.now() - started).toFixed(1)),
+      word: wordScore(text, item.data.ground_truth.main_content), anchor: anchorScore(text, item.data.ground_truth),
+      outputCharacters: text.length, outputHash: sha(text), stats: result?.stats || null, warnings: result?.warnings || [], usage: result?.usage || null,
+      attempts: after.requests - before.requests, knownInputTokens: after.knownInputTokens - before.knownInputTokens, knownOutputTokens: after.knownOutputTokens - before.knownOutputTokens,
+      responsesMissingInputUsage: after.responsesMissingInputUsage - before.responsesMissingInputUsage, responsesMissingOutputUsage: after.responsesMissingOutputUsage - before.responsesMissingOutputUsage });
+  }
+  await checkpoint();
+  console.log(`[${index + 1}/${selected.length}] ${item.id}: ` + rows.slice(-engines.length).map(r => `${r.engine}=${r.status}`).join(' '));
+}
+for (const engine of engines) {
+  const er = rows.filter(r => r.engine === engine);
+  report.summaries[engine] = { overall: aggregate(er), byType: Object.fromEntries(TYPES.map(t => [t, aggregate(er.filter(r => r.type === t))])) };
+}
+if (!rows.some(r => r.status === 'not_run')) {
+  for (const e of engines.slice(1)) report.paired.push(pairedBootstrap(rows, e, 'mozilla-readability'));
+  if (variants.length === 2) report.paired.push(pairedBootstrap(rows, 'jev-generic', 'jev-api'));
+}
+report.status = rows.some(r => r.status === 'not_run') ? 'incomplete' : rows.some(r => r.status === 'error') ? 'completed_with_errors' : 'completed';
+report.finishedAt = new Date().toISOString();
+await checkpoint();
+console.log('WCXB_SUMMARY:' + JSON.stringify({ status: report.status, dataset: report.dataset, usage: report.usage, summaries: report.summaries, paired: report.paired }));
+if (rows.some(r => r.status !== 'ok')) process.exitCode = 1;

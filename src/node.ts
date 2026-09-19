@@ -21,7 +21,8 @@ export async function extract(html: string, options: NodeExtractOptions = {}): P
   }
   const processLike = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
   const classifier = options.strategy === 'heuristic' ? undefined : options.classifier || createJevClassifier({ ...options.jev, apiKey: options.apiKey || processLike?.env?.TYPESAFE_API_KEY || '' });
-  return extractCore(html, { ...options, parseDocument, classifier });
+  const maxBlocks = options.maxBlocks ?? (options.jev?.largePage ? options.jev.largePage.maxBlocks ?? 5000 : undefined);
+  return extractCore(html, { ...options, maxBlocks, parseDocument, classifier });
 }
 export { createJevClassifier } from './jev.js';
 export * from './types.js';

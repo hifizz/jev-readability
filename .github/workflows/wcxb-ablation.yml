@@ -1,0 +1,60 @@
+name: WCXB Typed vs Generic
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Pinned JEV version
+        type: string
+        required: true
+        default: jev-1.13.0
+  push:
+    branches: [main]
+    paths: ['.github/eval-trigger-wcxb-ablation-v1']
+permissions:
+  contents: read
+concurrency:
+  group: wcxb-paid-ablation
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    if: github.repository == 'hifizz/jev-readability' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.actor == 'hifizz' && github.run_attempt == 1))
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install and test without model credentials
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+          npm test
+          npm run test:node
+          npm --prefix benchmark install --ignore-scripts --no-audit --no-fund
+      - name: Checkout pinned WCXB test data
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/Murrough-Foley/web-content-extraction-benchmark.git wcxb-repo
+          git -C wcxb-repo sparse-checkout init --cone
+          git -C wcxb-repo sparse-checkout set test
+          git -C wcxb-repo checkout c039d5ee9f5a3a984a0e167e63aacd04e76e78a9
+      - name: Run one bounded 140-page paired comparison
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          JEV_MODEL: ${{ inputs.model || 'jev-1.13.0' }}
+        run: |
+          node benchmark/wcxb-run.mjs --jev --large-pages --variants typed,generic --dataset wcxb-repo/test --per-type 20 --max-requests 2400 --max-bytes 120000000
+      - name: Write summary even when extraction fails
+        if: always()
+        run: node benchmark/summary.mjs
+      - name: Upload checkpoint and result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wcxb-ablation-${{ github.run_id }}
+          path: docs/benchmarks/wcxb-jev-run.json
+          if-no-files-found: warn
+          retention-days: 30

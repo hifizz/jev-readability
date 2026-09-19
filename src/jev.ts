@@ -1,3 +1,4 @@
+import { partitionCandidates } from './regions.js';
 import { assertMode, emptyUsage, positiveInteger } from './types.js';
 import type { BlockRole, Candidate, Classifier, ClassifyInput, ClassifyResult, Decision, Usage } from './types.js';
 
@@ -20,7 +21,16 @@ const MODES = {
   agent: 'Keep primary information that an agent can use to understand this page, including substantive discussion, code, reference links and tables. Exclude ads, tracking notices and generic site chrome. Do not keep everything merely because it might be useful.',
 } as const;
 
+export interface LargePageOptions {
+  /** Total page bound, not a per-region allowance. Default 5000; maximum 10000. */
+  maxBlocks?: number;
+  /** Structural partition bound. Default and maximum 500. */
+  regionBlocks?: number;
+}
+
 export interface JevOptions {
+  /** Opt-in; preserves the original <=500-candidate validation by default. */
+  largePage?: LargePageOptions;
   apiKey: string;
   endpoint?: string;
   model?: string;
@@ -127,6 +137,31 @@ export function buildJevBatches(input: ClassifyInput, options: Partial<JevOption
   return batches;
 }
 
+/** Plan the entire page before any HTTP call; all regions share one request/time budget. */
+export function buildJevPlan(input: ClassifyInput, options: Partial<JevOptions> = {}): { batches: RequestBatch[]; regions: number } {
+  if (!options.largePage) return { batches: buildJevBatches(input, options), regions: input.candidates.length ? 1 : 0 };
+  const maxPageBlocks = positiveInteger(options.largePage.maxBlocks ?? 5000, 'largePage.maxBlocks');
+  const regionBlocks = positiveInteger(options.largePage.regionBlocks ?? 500, 'largePage.regionBlocks');
+  if (maxPageBlocks > 10000 || regionBlocks > 500) throw new Error('largePage limits: maxBlocks <=10000, regionBlocks <=500');
+  if (!isRecord(input) || !Array.isArray(input.candidates) || input.candidates.length > maxPageBlocks) throw new Error(`Page exceeds largePage.maxBlocks (${maxPageBlocks})`);
+  // Validate even empty input, and validate all candidates BEFORE constructing any request.
+  validateClassifyInput({ ...input, candidates: [] });
+  const ids = new Set<string>();
+  let characters = 0;
+  for (let start = 0; start < input.candidates.length; start += 500) {
+    const chunk = input.candidates.slice(start, start + 500);
+    validateClassifyInput({ ...input, candidates: chunk });
+    for (const c of chunk) {
+      if (ids.has(c.id)) throw new Error('Duplicate block id across regions');
+      ids.add(c.id);
+      characters += c.text.length;
+      if (characters > 2_000_000) throw new Error('Candidate text exceeds 2,000,000 characters across regions');
+    }
+  }
+  const regions = partitionCandidates(input.candidates, regionBlocks);
+  return { regions: regions.length, batches: regions.flatMap(candidates => buildJevBatches({ ...input, candidates }, options)) };
+}
+
 export function decodeJevResponse(value: unknown, batch: RequestBatch, options: Partial<JevOptions> = {}): { decisions: Record<string, Decision>; model: string; inputTokens: number | null; outputTokens: number | null } {
   if (!isRecord(value) || !isRecord(value.answers) || typeof value.model !== 'string') throw new Error('Malformed Jev response: expected model and answers');
   const threshold = assertRange(options.keepThreshold ?? 0.5, 'keepThreshold', 0, 1);
@@ -197,11 +232,13 @@ export function createJevClassifier(options: JevOptions): Classifier {
   const requestFetch = options.fetch || fetch;
   return async (input, runtime): Promise<ClassifyResult> => {
     runtime?.signal?.throwIfAborted();
-    const batches = buildJevBatches(input, options);
+    const plan = buildJevPlan(input, options);
+    const batches = plan.batches;
     if (batches.length > maxRequests) throw new Error(`Needs ${batches.length} batches but maxRequests is ${maxRequests}`);
     const usage: Usage = { ...emptyUsage(), batches: batches.length, questions: batches.reduce((n, b) => n + Object.keys(b.body.questions).length, 0), sampledBlocks: batches.reduce((n, b) => n + b.sampledBlocks, 0) };
     const results: Record<string, Decision> = {};
     const warnings: string[] = [];
+    if (plan.regions > 1) warnings.push(`Large page partitioned into ${plan.regions} structural regions; block IDs/order are preserved and all regions share the same request budget.`);
     if (usage.sampledBlocks) warnings.push(`${usage.sampledBlocks} large block(s) were classified from head/tail samples. Output still contains their full source text.`);
     if (batches.length > 1) warnings.push('Large page split into batches. Each batch sees page metadata and its own neighboring blocks, not the full page.');
     const stop = new AbortController();
