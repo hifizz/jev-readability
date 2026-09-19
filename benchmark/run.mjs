@@ -22,7 +22,7 @@ try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const sourceFiles = ['src/dom.ts', 'src/render.ts', 'src/index.ts', 'src/heuristic.ts', 'src/jev.ts', 'src/types.ts', 'benchmark/run.mjs', 'benchmark/metrics.mjs', 'benchmark/corpus.mjs'];
 const sourceHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async file => [file, sha256(await readFile(new URL('../' + file, import.meta.url)))])));
-const classifier = live ? createJevClassifier({ apiKey: process.env.TYPESAFE_API_KEY, model: process.env.JEV_MODEL, maxRequests: 8, concurrency: 1 }) : null;
+const classifier = live ? createJevClassifier({ apiKey: process.env.TYPESAFE_API_KEY, model: process.env.JEV_MODEL, maxRequests: 32, concurrency: 1 }) : null;
 const engines = ['mozilla-readability', 'jev-local-heuristic', ...(live ? ['jev-api'] : [])];
 const rows = [];
 for (const example of cases) {
