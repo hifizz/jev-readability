@@ -16,7 +16,7 @@
 
 [快速开始](#快速开始) · [Readability 对比](#与-mozilla-readability-对比) · [评测结果](#评测结果) · [浏览器调用](#浏览器与扩展)
 
-> **实验阶段 v0.1。** 独立社区项目，非 Mozilla 或 TypeSafe 官方产品。已实现 JEV 客户端和离线抽取流程，但真实 JEV 的质量、延迟、成本仍待评测。目前不宣称它优于 Readability。
+> **实验阶段 v0.1。** 独立社区项目，非 Mozilla 或 TypeSafe 官方产品。现已发布 140 页 WCXB 外部评测，但不能把该结果泛化到所有网页。
 
 ## 快速开始
 
@@ -78,7 +78,7 @@ console.log(result.usage);
 | 输出 | 文章 HTML / 文本及元数据 | 正文 / HTML / Markdown、元数据、逐块取舍与角色 |
 | 可检查性 | 配置选项与调试日志 | 原始块、概率、`needsReview`、用量和警告 |
 | 元数据 | 包含 JSON-LD 支持 | 基础 HTML / meta 字段，覆盖范围不等同 |
-| 代价与成熟度 | 无推理费用；已有 Firefox 集成 | 增加网络与模型费用、采样与分批；模型效果待验证 |
+| 代价与成熟度 | 无推理费用；已有 Firefox 集成 | 增加网络与模型费用、采样与分批；效果随页面类型变化 |
 | HTML 安全 | 展示时另配 sanitizer | 有限白名单重组；展示时仍需 sanitizer / CSP |
 
 Readability 也可能成功提取文档、论坛和商品页，不能笼统说它“不支持”。JEV 的五种模式是不同判断标准，不代表五种已分别通过质量验证的能力。两者都不能替代抓取或浏览器渲染。
@@ -89,31 +89,36 @@ Readability 也可能成功提取文档、论坛和商品页，不能笼统说�
 
 ## 评测结果
 
-### 合成页面基线检查，不是 JEV 模型成绩
+### WCXB：140 个真实网页、7 种页面类型
 
-实际执行 **8 个原创合成页面**：7 个英文、1 个中文；标注 27 个应保留、21 个应排除的文本锚点。两种实现使用相同版本的 `jsdom@26.1.0` 创建新 DOM，Readability 使用默认配置。这是开发样例，不是代表真实网页分布的独立测试集。
+我们在公开的 WCXB v1.0 test split 上固定抽取了 **140 页**：article、documentation、forum、product、service、listing、collection 各 20 页，并使用真实 JEV API 完成评测。上游数据 commit 和抽样 seed 都已固定，可复现。
 
-| 实际评测对象 | 锚点精确率 | 锚点召回率 | 锚点 F1 | 全部锚点正确的页面 |
-| --- | ---: | ---: | ---: | ---: |
-| Mozilla Readability `0.6.0` | 92.86% | 96.30% | 94.55% | 6 / 8 |
-| 本库：**本地规则，非 JEV** | 92.31% | 88.89% | 90.57% | 6 / 8 |
-| **真实 JEV API** | 未测 | 未测 | 未测 | 未运行 |
+| 引擎 | Word 精确率 | Word 召回率 | Word F1 | Anchor F1 | 失败 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Mozilla Readability `0.6.0` | **80.62%** | 74.01% | 72.68% | 79.13% | 0 / 140 |
+| **JEV API（`jev-1.13.0`）** | 72.98% | **94.99%** | **79.97%** | **92.93%** | 1 / 140 |
 
-指标采用微平均，只衡量标注文本片段，**不是整页准确率**。Readability 漏了文档警告块；本库规则漏了没有语义容器的短正文；两者都保留了没有广告标记的促销段落。所有案例和失败项均公开，没有为美化表格而事后调规则。
+这组数据更像是在说明 JEV 是一个**高召回语义提取器**：它明显更愿意保留 ground truth 内容，但也会保留更多参考答案之外的文本。Readability 的整体精确率更高，并且在纯 article 页面上仍略强。
 
-[完整报告与口径](./docs/BENCHMARK.md) · [机器可读汇总](./docs/benchmarks/baseline-summary.json) · [CI 原始输出](https://github.com/hifizz/jev-readability/actions/runs/35461669054) · [完整语料](./benchmark/corpus.mjs)
+| 页面类型 | Readability Word F1 | JEV Word F1 |
+| --- | ---: | ---: |
+| Article | **97.12%** | 95.03% |
+| Documentation | 86.44% | **93.98%** |
+| Forum | 62.16% | **77.11%** |
+| Product | 62.23% | **69.56%** |
+| Service | **78.79%** | 78.53% |
+| Listing | 60.28% | **77.41%** |
+| Collection | 61.77% | **67.56%** |
 
-```bash
-npm install
-npm --prefix benchmark install --ignore-scripts
-node benchmark/run.mjs
-```
+JEV 有 1 页因为超过当前 **500 block** 安全上限而失败；这个失败没有从统计中删除。整轮真实评测共发生 **888 次 TypeSafe 请求**。136 页返回了完整 token usage，已知至少 **1076 万 input + 169 万 output tokens**；另有 3 个成功页面没有返回 token usage，所以真实总量更高，我们不做猜测。
 
-脚本输出每页正文、遗漏 / 混入锚点、源码哈希、版本及诊断耗时到 `docs/benchmarks/baseline-run.json`。单次耗时**不能当作速度评测**。报告另有 `--jev` 真实 API 运行说明；基线 CI 不使用密钥。
+**公平性说明：** JEV 会读取 WCXB 页面类型并映射到本库模式；Readability 没有获得页面类型提示。WCXB 标签本身也是公开的，因此这是外部可复现测试，不是秘密盲测。
 
-### 工程验证
+[WCXB 完整方法与结果](./docs/WCXB_BENCHMARK.md) · [机器可读汇总](./docs/benchmarks/wcxb-summary.json) · [GitHub Actions 原始运行](https://github.com/hifizz/jev-readability/actions/runs/35464162174) · [WCXB 数据集](https://github.com/Murrough-Foley/web-content-extraction-benchmark)
 
-类型检查、协议 / 包测试、Node/linkedom 解析和打包检查已在 **Node 22、24** 的 [CI](https://github.com/hifizz/jev-readability/actions/runs/35461669053) 中通过。历史 Chromium 记录为 32 项 DOM、8 项 UI 检查；不是本次重新执行的结果，也不是真实 JEV 端到端验证。详见[测试范围与限制](./docs/TEST_REPORT.md)。
+### 合成页面 smoke test
+
+此前的 8 页 synthetic benchmark 仍保留用于快速回归，但它不能代表真实网页分布。详见 [synthetic benchmark 报告](./docs/BENCHMARK.md)。
 
 ## 工作方式
 
