@@ -16,7 +16,7 @@ A DOM-first TypeScript library for reader views, RAG pipelines, and AI agents. S
 
 [Quick start](#quick-start) · [Readability comparison](#comparison-with-mozilla-readability) · [Evaluation](#evaluation) · [Browser API](#browser-and-extension-api)
 
-> **Experimental v0.1.** Independent community project, not an official Mozilla or TypeSafe product. The JEV client and offline extraction pipeline are implemented; a real JEV quality, latency, and cost evaluation is still pending. No claim of superiority over Readability is made.
+> **Experimental v0.1.** Independent community project, not an official Mozilla or TypeSafe product. A 140-page external WCXB evaluation is published below; results should not be generalized beyond the tested corpus.
 
 ## Quick start
 
@@ -78,7 +78,7 @@ Both approaches **extract existing content rather than generate new prose**. The
 | Output | Article HTML/text and metadata | Text/HTML/Markdown, metadata, per-block keep/role decisions |
 | Inspectability | Options and debug logging | Original blocks, probabilities, `needsReview`, usage and warnings |
 | Metadata | Includes JSON-LD support | Basic HTML/meta fields; not equivalent metadata coverage |
-| Tradeoffs | No inference bill; mature Firefox integration | Extra network/model cost, sampling and batching; model quality unverified |
+| Tradeoffs | No inference bill; mature Firefox integration | Extra network/model cost, sampling and batching; quality varies by page type |
 | HTML safety | Use a separate sanitizer at display time | Narrow reconstruction allowlist; still use a sanitizer/CSP at display time |
 
 Readability can also succeed on non-article pages; this is not a claim that it cannot handle documentation, forums, or products. The five JEV modes express intent, not five independently validated quality guarantees. Neither library replaces fetching or browser rendering.
@@ -89,31 +89,36 @@ Sources: [Mozilla Readability API and security notes](https://github.com/mozilla
 
 ## Evaluation
 
-### Synthetic baseline smoke test — not a JEV model benchmark
+### WCXB: 140 real-world pages across 7 page types
 
-Executed on **8 original synthetic pages**: 7 English, 1 Chinese; 27 positive and 21 negative text anchors. Both implementations used fresh `jsdom@26.1.0` documents; Readability used default settings. These are development fixtures, not a representative or held-out web dataset.
+We ran the authenticated JEV pipeline on a **fixed balanced subset of 140 pages** from the public WCXB v1.0 test split: 20 each of article, documentation, forum, product, service, listing, and collection pages. The upstream dataset commit and sampling seed are pinned, so this run is reproducible.
 
-| Engine actually evaluated | Anchor precision | Anchor recall | Anchor F1 | Pages with all anchors correct |
-| --- | ---: | ---: | ---: | ---: |
-| Mozilla Readability `0.6.0` | 92.86% | 96.30% | 94.55% | 6 / 8 |
-| This library: **local rules, NOT JEV** | 92.31% | 88.89% | 90.57% | 6 / 8 |
-| **JEV API** | Not measured | Not measured | Not measured | Not run |
+| Engine | Word precision | Word recall | Word F1 | Anchor F1 | Errors |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Mozilla Readability `0.6.0` | **80.62%** | 74.01% | 72.68% | 79.13% | 0 / 140 |
+| **JEV API (`jev-1.13.0`)** | 72.98% | **94.99%** | **79.97%** | **92.93%** | 1 / 140 |
 
-These micro-averaged scores measure selected labeled text spans, **not full-document accuracy**. Readability missed a documentation warning; our local rules missed the short unmarked body; both retained an unmarked promotional paragraph. We report all cases, including regressions, and did not tune extraction rules to improve this table.
+JEV is much more recall-oriented in this run: it retains substantially more ground-truth content, at the cost of extra non-reference text. Readability remains stronger on precision and on the article-only subset.
 
-[Full report and methodology](https://github.com/hifizz/jev-readability/blob/main/docs/BENCHMARK.md) · [Machine-readable summary](https://github.com/hifizz/jev-readability/blob/main/docs/benchmarks/baseline-summary.json) · [CI run and raw output](https://github.com/hifizz/jev-readability/actions/runs/35461669054) · [Corpus](./benchmark/corpus.mjs)
+| Page type | Readability Word F1 | JEV Word F1 |
+| --- | ---: | ---: |
+| Article | **97.12%** | 95.03% |
+| Documentation | 86.44% | **93.98%** |
+| Forum | 62.16% | **77.11%** |
+| Product | 62.23% | **69.56%** |
+| Service | **78.79%** | 78.53% |
+| Listing | 60.28% | **77.41%** |
+| Collection | 61.77% | **67.56%** |
 
-```bash
-npm install
-npm --prefix benchmark install --ignore-scripts
-node benchmark/run.mjs
-```
+One JEV page failed because it produced more than the current **500-block safety limit**; that failure remains in the denominator. The live run made **888 TypeSafe requests**. Complete token usage was returned for 136 pages: at least **10.76M input + 1.69M output tokens** were reported; 3 successful pages omitted usage, so the true total is higher and is not estimated.
 
-The runner saves per-page output, missing/leaked anchors, source hashes, versions, and diagnostic timings to `docs/benchmarks/baseline-run.json`. These single-pass timings are **not** a speed benchmark. A separately authenticated `--jev` run is documented in the report; no key is used by baseline CI.
+**Fairness caveat:** JEV receives the WCXB page type through this library's mode mapping; Readability receives no task-type hint. WCXB labels are public, so this is an external reproducible benchmark rather than a secret blind test.
 
-### Engineering checks
+[WCXB methodology and full tables](./docs/WCXB_BENCHMARK.md) · [Machine-readable summary](./docs/benchmarks/wcxb-summary.json) · [GitHub Actions run](https://github.com/hifizz/jev-readability/actions/runs/35464162174) · [WCXB dataset](https://github.com/Murrough-Foley/web-content-extraction-benchmark)
 
-TypeScript checks, protocol/package tests, Node/linkedom extraction, and packaging passed on **Node 22 and 24** in [CI](https://github.com/hifizz/jev-readability/actions/runs/35461669053). Historical Chromium results cover 32 DOM checks and 8 UI checks, but are not newly rerun results or real JEV end-to-end evidence. See [test scope and limitations](https://github.com/hifizz/jev-readability/blob/main/docs/TEST_REPORT.md).
+### Synthetic smoke test
+
+The earlier 8-page synthetic suite remains useful for fast regression testing, but it is not representative of the web. See [the synthetic benchmark report](./docs/BENCHMARK.md).
 
 ## How it works
 
