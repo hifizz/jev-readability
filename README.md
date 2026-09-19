@@ -6,9 +6,9 @@
 
 # jev-readability
 
-**Extract the source. Let JEV decide what belongs.**
+**Read webpages like an agent, not a reader.**
 
-A DOM-first TypeScript library for reader views, RAG pipelines and AI agents. Split HTML into non-overlapping blocks, classify them with TypeSafe JEV, and reconstruct **text, HTML and Markdown from the original content**. The model selects content; it does not write the article.
+A **semantic content extractor for AI agents**. Mozilla Readability is optimized for turning articles into clean reader views; jev-readability is optimized for **not missing information an agent may need** across documentation, forums, products, listings and long pages. It partitions the DOM, lets TypeSafe JEV decide what belongs, and reconstructs **Markdown, text and HTML from the original source** — the model selects content, it does not rewrite it.
 
 [![CI](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml)
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
@@ -63,6 +63,54 @@ console.log(result.usage);
 Save as `extract.mjs`, configure `.env` and run `node --env-file=.env extract.mjs`. Use `{ strategy: 'heuristic' }` for an offline baseline; its model probabilities remain `null`.
 
 The modes are `article`, `documentation`, `forum`, `product` and `agent`. Use `agent` when no page-type hint is available. The default library mode remains `article`; the example's explicit mode does not change that default.
+
+## For Mozilla Readability users
+
+If you already use `@mozilla/readability`, the easiest mental model is:
+
+> **Keep your browser/fetch layer. Replace the article-only selection step with an agent-oriented semantic selection step.**
+
+Readability is still an excellent default for clean article reading. jev-readability is aimed at the cases where "main article" is too narrow: API docs, forum answers, product specifications, listings, collections, warnings, code blocks and other information an agent may need.
+
+### Before: Readability
+
+```js
+import { Readability } from '@mozilla/readability';
+
+const article = new Readability(document.cloneNode(true)).parse();
+console.log(article.textContent);
+```
+
+### After: jev-readability
+
+```js
+import { extract } from 'jev-readability';
+
+const page = await extract(document, {
+  mode: 'agent',
+  classifier,
+});
+
+console.log(page.markdown);
+```
+
+The surrounding architecture can stay the same:
+
+```text
+fetch / Playwright / browser
+        ↓
+     rendered DOM
+        ↓
+Readability.parse()        → clean article
+        or
+jev-readability.extract()  → agent-ready semantic Markdown
+```
+
+**Use Readability when:** you want a local, zero-inference-cost article reader with high precision.
+
+**Try jev-readability when:** missing a warning, reply, spec table, code example, product field or listing item is more costly than retaining a little extra text.
+
+Migration is incremental: run both extractors side-by-side, compare their output on your own pages, then route article-only workloads to Readability and agent ingestion workloads to jev-readability.
 
 ## Comparison with Mozilla Readability
 
