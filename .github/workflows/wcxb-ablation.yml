@@ -7,9 +7,6 @@ on:
         type: string
         required: true
         default: jev-1.13.0
-  push:
-    branches: [main]
-    paths: ['.github/eval-trigger-wcxb-ablation-v1']
 permissions:
   contents: read
 concurrency:
@@ -17,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   evaluate:
-    if: github.repository == 'hifizz/jev-readability' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.actor == 'hifizz' && github.run_attempt == 1))
+    if: github.repository == 'hifizz/jev-readability' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

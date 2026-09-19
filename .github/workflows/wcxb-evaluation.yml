@@ -1,112 +1,54 @@
 name: WCXB 140-page evaluation
-
 on:
   workflow_dispatch:
     inputs:
       model:
-        description: JEV model
+        description: Pinned JEV version
         required: true
-        default: jev-latest
+        default: jev-1.13.0
         type: string
       per_type:
-        description: Pages per WCXB page type (7 types; max 25)
+        description: Pages per type (1-25; 20 gives the canonical 140-page cohort)
         required: true
         default: '20'
         type: string
-  push:
-    branches: [main]
-    paths:
-      - '.github/eval-trigger-wcxb-v0.2'
-
 permissions:
   contents: read
-
+concurrency:
+  group: wcxb-paid-ablation
+  cancel-in-progress: false
 jobs:
   evaluate:
+    if: github.repository == 'hifizz/jev-readability' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-      JEV_MODEL: ${{ github.event_name == 'workflow_dispatch' && inputs.model || 'jev-latest' }}
-      PER_TYPE: ${{ github.event_name == 'workflow_dispatch' && inputs.per_type || '20' }}
-      WCXB_COMMIT: c039d5ee9f5a3a984a0e167e63aacd04e76e78a9
-
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
-
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
           package-manager-cache: false
-
-      - name: Check JEV secret
-        shell: bash
-        run: |
-          test -n "$TYPESAFE_API_KEY" || { echo "::error::Missing TYPESAFE_API_KEY repository secret"; exit 1; }
-
-      - name: Install project and benchmark dependencies
+      - name: Install dependencies without model credentials
         run: |
           npm install --no-audit --no-fund
           npm --prefix benchmark install --ignore-scripts --no-audit --no-fund
-
-      - name: Checkout pinned WCXB v1.0 dataset
-        shell: bash
+      - name: Checkout pinned WCXB test data
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/Murrough-Foley/web-content-extraction-benchmark.git wcxb-repo
           git -C wcxb-repo sparse-checkout init --cone
-          git -C wcxb-repo sparse-checkout set test LICENSE metadata.json
-          git -C wcxb-repo checkout "$WCXB_COMMIT"
-          test "$(git -C wcxb-repo rev-parse HEAD)" = "$WCXB_COMMIT"
-
-      - name: Run balanced WCXB evaluation
-        run: |
-          node benchmark/wcxb-run.mjs --jev --dataset wcxb-repo/test --per-type "$PER_TYPE" --seed jev-readability-wcxb-v0.2
-
+          git -C wcxb-repo sparse-checkout set test
+          git -C wcxb-repo checkout c039d5ee9f5a3a984a0e167e63aacd04e76e78a9
+      - name: Run bounded Typed evaluation
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          JEV_MODEL: ${{ inputs.model }}
+          PER_TYPE: ${{ inputs.per_type }}
+        run: node benchmark/wcxb-run.mjs --jev --large-pages --variants typed --dataset wcxb-repo/test --per-type "$PER_TYPE" --max-requests 2400 --max-bytes 120000000
       - name: Publish summary
         if: always()
-        shell: bash
-        run: |
-          if [ ! -f docs/benchmarks/wcxb-jev-run.json ]; then
-            echo "# WCXB evaluation" >> "$GITHUB_STEP_SUMMARY"
-            echo "No report produced; inspect the failed step." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          node --input-type=module <<'JS' >> "$GITHUB_STEP_SUMMARY"
-          import { readFile } from 'node:fs/promises';
-          const r = JSON.parse(await readFile('docs/benchmarks/wcxb-jev-run.json', 'utf8'));
-          const pct = x => x == null ? '—' : (x * 100).toFixed(2) + '%';
-          console.log('# WCXB ' + r.dataset.selectedPages + '-page evaluation');
-          console.log('');
-          console.log('Pinned dataset commit: `' + r.dataset.commit.slice(0, 12) + '` · ' + r.dataset.perType + ' pages/type · fixed seed');
-          console.log('');
-          console.log('| Engine | Word P | Word R | Word F1 | Anchor F1 | Errors | Mean ms/page |');
-          console.log('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
-          for (const engine of ['mozilla-readability', 'jev-api']) {
-            const s = r.summaries[engine]?.overall;
-            if (!s) continue;
-            console.log('| ' + engine + ' | ' + pct(s.meanWordPrecision) + ' | ' + pct(s.meanWordRecall) + ' | ' + pct(s.meanWordF1) + ' | ' + pct(s.anchorF1) + ' | ' + s.errors + ' | ' + (s.meanElapsedMs?.toFixed(1) ?? '—') + ' |');
-          }
-          console.log('');
-          console.log('## By page type — Word F1');
-          console.log('');
-          console.log('| Type | Readability | JEV |');
-          console.log('| --- | ---: | ---: |');
-          for (const type of r.dataset.types) {
-            const a = r.summaries['mozilla-readability'].byType[type];
-            const b = r.summaries['jev-api'].byType[type];
-            console.log('| ' + type + ' | ' + pct(a.meanWordF1) + ' | ' + pct(b.meanWordF1) + ' |');
-          }
-          console.log('');
-          console.log('## JEV usage');
-          console.log('');
-          console.log('- Requests: **' + r.usage.requests + '**');
-          console.log('- Input tokens: **' + (r.usage.inputTokens ?? 'unknown') + '**');
-          console.log('- Output tokens: **' + (r.usage.outputTokens ?? 'unknown') + '**');
-          console.log('- Models returned: **' + (r.usage.models.join(', ') || 'unknown') + '**');
-          console.log('');
-          console.log('> External WCXB held-out test split, but labels are public. JEV receives page type via mode mapping; service/listing/collection use generic agent mode. See JSON artifact for every page and failure.');
-          JS
-
+        run: node benchmark/summary.mjs
       - name: Upload detailed report
         if: always()
         uses: actions/upload-artifact@v4
