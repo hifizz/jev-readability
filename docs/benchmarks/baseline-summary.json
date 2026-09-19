@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordType": "compact summary transcribed from verified CI output; full text and timing in linked raw log",
+  "generatedAt": "2026-09-19T18:35:29.320Z",
+  "sourceCommit": "747e57db4ee71c847e69f4cf3c23d5ef8cd1e58e",
+  "runUrl": "https://github.com/hifizz/jev-readability/actions/runs/35461669054",
+  "jobId": 105946520990,
+  "environment": {"node": "v22.23.2", "platform": "linux", "arch": "x64", "cpu": "AMD EPYC 7763 64-Core Processor"},
+  "versions": {"readability": "0.6.0", "jsdom": "26.1.0"},
+  "corpusHash": "89742f375fd092bae398aff3028cbde421399fc4a4037ea36e5fc07cefd65ab8",
+  "corpus": {"pages": 8, "english": 7, "chinese": 1, "positiveAnchors": 27, "negativeAnchors": 21, "kind": "synthetic development fixtures, not held-out"},
+  "metric": "micro-averaged NFKC/whitespace-normalized case-sensitive text-anchor matching; not whole-document accuracy",
+  "jev": {"status": "not_run", "accuracy": null, "latency": null, "billedCost": null},
+  "summary": {
+    "mozilla-readability": {"total": 8, "completed": 8, "errors": 0, "perfect": 6, "tp": 26, "fp": 2, "fn": 1, "precision": 0.9285714285714286, "recall": 0.9629629629629629, "f1": 0.9454545454545454, "modelRequests": 0},
+    "jev-local-heuristic": {"total": 8, "completed": 8, "errors": 0, "perfect": 6, "tp": 24, "fp": 2, "fn": 3, "precision": 0.9230769230769231, "recall": 0.8888888888888888, "f1": 0.9056603773584906, "modelRequests": 0}
+  },
+  "cases": [
+    {"id": "article-en", "expectedPositive": 3, "readability": {"tp": 3, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 3, "fp": 0, "fn": 0}},
+    {"id": "article-zh", "expectedPositive": 3, "readability": {"tp": 3, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 3, "fp": 0, "fn": 0}},
+    {"id": "documentation", "expectedPositive": 4, "readability": {"tp": 3, "fp": 0, "fn": 1}, "localHeuristic": {"tp": 4, "fp": 0, "fn": 0}},
+    {"id": "forum", "expectedPositive": 3, "readability": {"tp": 3, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 3, "fp": 0, "fn": 0}},
+    {"id": "product", "expectedPositive": 4, "readability": {"tp": 4, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 4, "fp": 0, "fn": 0}},
+    {"id": "link-directory", "expectedPositive": 4, "readability": {"tp": 4, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 4, "fp": 0, "fn": 0}},
+    {"id": "unmarked-promotion", "expectedPositive": 3, "readability": {"tp": 3, "fp": 2, "fn": 0}, "localHeuristic": {"tp": 3, "fp": 2, "fn": 0}},
+    {"id": "short-unmarked-content", "expectedPositive": 3, "readability": {"tp": 3, "fp": 0, "fn": 0}, "localHeuristic": {"tp": 0, "fp": 0, "fn": 3}}
+  ]
+}

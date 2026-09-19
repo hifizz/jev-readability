@@ -6,27 +6,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./jev": {
-      "types": "./dist/jev.d.ts",
-      "import": "./dist/jev.js"
-    },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "import": "./dist/node.js"
-    }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./jev": { "types": "./dist/jev.d.ts", "import": "./dist/jev.js" },
+    "./node": { "types": "./dist/node.d.ts", "import": "./dist/node.js" }
   },
   "files": [
-    "dist",
-    "src",
-    "examples/extract-file.mjs",
-    "README.md",
-    "docs/GUIDE.md",
-    "docs/PUBLISHING.md",
-    "LICENSE"
+    "dist", "src", "examples/extract-file.mjs", "README.md", "README.zh-CN.md",
+    "docs/GUIDE.md", "docs/PUBLISHING.md", "docs/BENCHMARK.md", "docs/TEST_REPORT.md",
+    "docs/benchmarks/baseline-summary.json", "docs/assets/banner.svg", "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

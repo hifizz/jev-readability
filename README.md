@@ -1,20 +1,28 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hifizz/jev-readability/main/docs/assets/banner.svg" alt="jev-readability — Find the content. Keep the original." width="100%" />
+</p>
+
+<p align="center"><strong>English</strong> · <a href="https://github.com/hifizz/jev-readability/blob/main/README.zh-CN.md">简体中文</a></p>
+
 # jev-readability
 
-**用 JEV 判断网页正文，用代码保留原文。**
+**Extract the source. Let JEV decide what belongs.**
 
-DOM-first content extraction with batched TypeSafe JEV decisions.
+A DOM-first TypeScript library for reader views, RAG pipelines, and AI agents. Split HTML into non-overlapping blocks, classify them with TypeSafe JEV, and reconstruct **text, HTML, and Markdown from the original content**. The model selects content; it does not write the article.
 
-一个面向 Reader View、搜索结果清洗、RAG 与 AI Agent 的实验性 TypeScript 库：先把 HTML 切成不重叠的 DOM 块，再由 JEV 判断保留与内容角色，最后从原始节点重组 **正文、HTML 和 Markdown**。模型不生成、不改写正文。
+[![CI](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml)
+[![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
 
-> **v0.1.0 / 实验阶段。** 独立社区项目，非 Mozilla 或 TypeSafe 官方产品。目前没有真实 JEV 准确率、成本或相对 Mozilla Readability 的对照数据。离线规则结果不冒充模型结果。
->
-> **发布状态：** 已准备 npm 发布配置，首次 registry 发布仍需维护者的 npm 认证。下面提供发布前即可使用的 GitHub 安装方式；不能把 `npm pack` 生成的文件当成已上线的 npm 包。
+[Quick start](#quick-start) · [Readability comparison](#comparison-with-mozilla-readability) · [Evaluation](#evaluation) · [Browser API](#browser-and-extension-api)
 
-## 快速开始
+> **Experimental v0.1.** Independent community project, not an official Mozilla or TypeSafe product. The JEV client and offline extraction pipeline are implemented; a real JEV quality, latency, and cost evaluation is still pending. No claim of superiority over Readability is made.
 
-### 运行中文 Demo
+## Quick start
 
-需要 **Node.js 22+**、npm 和 Git。
+### Try the local demo — no key required
+
+Requires **Node.js 22+**, npm, and Git. The demo interface is currently Chinese; the documentation has English and Chinese editions.
 
 ```bash
 git clone https://github.com/hifizz/jev-readability.git
@@ -23,35 +31,23 @@ npm install
 npm run demo
 ```
 
-打开 `http://127.0.0.1:4317`，加载示例、粘贴 HTML 或打开本地 HTML 文件，点击「开始提取」。可以检查正文、Markdown、HTML、JSON、逐块判断及请求统计。
+Open `http://127.0.0.1:4317`. Load a fixture, paste HTML, or open a local HTML file. Inspect extracted content, Markdown, HTML, JSON, block decisions, and request statistics.
 
-默认使用 **本地规则 · 非 JEV**，无需密钥，不调用模型。它用于验证抽取流程，不是 JEV 的免费推理模式。
+The default **local heuristic** mode is offline and makes no model calls. It is a development baseline, **not free JEV inference**.
 
-开启真实 JEV：
+To use JEV, copy `.env.example` to `.env`, set `TYPESAFE_API_KEY`, restart the demo, and select **JEV · 真实 API**. The server keeps the key; sampled candidate content is sent to TypeSafe and may incur charges. Failures are reported rather than silently relabeled as successful model results.
 
-```bash
-cp .env.example .env
-# 编辑 .env，填写 TYPESAFE_API_KEY；不要提交 .env
-npm run demo
-```
+### Install in your project
 
-重启后选择「JEV · 真实 API」。密钥只在服务端使用；候选文本将发往 TypeSafe，可能产生费用。没有密钥或调用失败时明确报错，不自动伪装为离线成功。
-
-### 在 Node.js 项目中安装
-
-**发布前，从 GitHub 安装：**
+Until the first authenticated npm registry release, install from GitHub:
 
 ```bash
 npm install github:hifizz/jev-readability linkedom
 ```
 
-**首次 npm 发布成功后：**
+After a registry release is confirmed, the package-name command is `npm install jev-readability linkedom`. See the [publishing guide](https://github.com/hifizz/jev-readability/blob/main/docs/PUBLISHING.md). A local `.tgz` or passing CI is not proof of npm publication.
 
-```bash
-npm install jev-readability linkedom
-```
-
-`linkedom` 是 Node 入口的可选 peer dependency，需显式安装；浏览器核心不依赖它。包为 **ESM**，包含 TypeScript 类型声明。GitHub 安装会通过 `prepare` 编译源码，因此不要禁用安装脚本；克隆项目后也可手动 `npm run build`。
+The package is ESM with TypeScript declarations. `linkedom` is required by the Node HTML-string entry point, but not by the browser core. GitHub installs compile through `prepare`; do not disable lifecycle scripts for that installation path.
 
 ```js
 import { readFile } from 'node:fs/promises';
@@ -68,55 +64,72 @@ console.log(result.markdown);
 console.log(result.usage);
 ```
 
-将代码保存为 `extract.mjs`，在当前目录的 `.env` 中配置密钥，然后执行：
+Save as `extract.mjs`, configure `.env`, and run `node --env-file=.env extract.mjs`. For an offline run, replace the options with `{ strategy: 'heuristic' }`; model probabilities remain `null`.
+
+## Comparison with Mozilla Readability
+
+Both approaches **extract existing content rather than generate new prose**. The difference is the selection mechanism and the information exposed to the caller—not a demonstrated quality advantage.
+
+| Dimension | Mozilla Readability | jev-readability v0.1 |
+| --- | --- | --- |
+| Selection | Local DOM/text heuristics | DOM partitioning + JEV block decisions; optional local baseline |
+| Primary workflow | Article extraction for reader view | Configurable `article`, `documentation`, `forum`, `product`, `agent` criteria |
+| Execution | Local; no model API required | JEV mode needs a backend, API key, and network; heuristic mode is offline |
+| Output | Article HTML/text and metadata | Text/HTML/Markdown, metadata, per-block keep/role decisions |
+| Inspectability | Options and debug logging | Original blocks, probabilities, `needsReview`, usage and warnings |
+| Metadata | Includes JSON-LD support | Basic HTML/meta fields; not equivalent metadata coverage |
+| Tradeoffs | No inference bill; mature Firefox integration | Extra network/model cost, sampling and batching; model quality unverified |
+| HTML safety | Use a separate sanitizer at display time | Narrow reconstruction allowlist; still use a sanitizer/CSP at display time |
+
+Readability can also succeed on non-article pages; this is not a claim that it cannot handle documentation, forums, or products. The five JEV modes express intent, not five independently validated quality guarantees. Neither library replaces fetching or browser rendering.
+
+Sources: [Mozilla Readability API and security notes](https://github.com/mozilla/readability#readme) · [TypeSafe typed-decision API](https://docs.typesafe.ai/api). Our behavior is defined by [the source](./src) and [extraction spec](./openspec/specs/extraction/spec.md).
+
+**Practical choice:** start with Readability for an offline article reader. Evaluate this library when you need configurable content-selection criteria, block-level decisions, or direct Markdown output—and measure the real JEV tradeoffs on your own pages first.
+
+## Evaluation
+
+### Synthetic baseline smoke test — not a JEV model benchmark
+
+Executed on **8 original synthetic pages**: 7 English, 1 Chinese; 27 positive and 21 negative text anchors. Both implementations used fresh `jsdom@26.1.0` documents; Readability used default settings. These are development fixtures, not a representative or held-out web dataset.
+
+| Engine actually evaluated | Anchor precision | Anchor recall | Anchor F1 | Pages with all anchors correct |
+| --- | ---: | ---: | ---: | ---: |
+| Mozilla Readability `0.6.0` | 92.86% | 96.30% | 94.55% | 6 / 8 |
+| This library: **local rules, NOT JEV** | 92.31% | 88.89% | 90.57% | 6 / 8 |
+| **JEV API** | Not measured | Not measured | Not measured | Not run |
+
+These micro-averaged scores measure selected labeled text spans, **not full-document accuracy**. Readability missed a documentation warning; our local rules missed the short unmarked body; both retained an unmarked promotional paragraph. We report all cases, including regressions, and did not tune extraction rules to improve this table.
+
+[Full report and methodology](https://github.com/hifizz/jev-readability/blob/main/docs/BENCHMARK.md) · [Machine-readable summary](https://github.com/hifizz/jev-readability/blob/main/docs/benchmarks/baseline-summary.json) · [CI run and raw output](https://github.com/hifizz/jev-readability/actions/runs/35461669054) · [Corpus](./benchmark/corpus.mjs)
 
 ```bash
-node --env-file=.env extract.mjs
+npm install
+npm --prefix benchmark install --ignore-scripts
+node benchmark/run.mjs
 ```
 
-不调用模型的本地基线：
+The runner saves per-page output, missing/leaked anchors, source hashes, versions, and diagnostic timings to `docs/benchmarks/baseline-run.json`. These single-pass timings are **not** a speed benchmark. A separately authenticated `--jev` run is documented in the report; no key is used by baseline CI.
 
-```js
-const result = await extract(html, { strategy: 'heuristic' });
-// result.method === 'heuristic'
-// result.usage.requests === 0；概率字段为 null
-```
+### Engineering checks
 
-### 命令行
+TypeScript checks, protocol/package tests, Node/linkedom extraction, and packaging passed on **Node 22 and 24** in [CI](https://github.com/hifizz/jev-readability/actions/runs/35461669053). Historical Chromium results cover 32 DOM checks and 8 UI checks, but are not newly rerun results or real JEV end-to-end evidence. See [test scope and limitations](https://github.com/hifizz/jev-readability/blob/main/docs/TEST_REPORT.md).
 
-安装本包与 `linkedom` 后，项目内可使用以下命令。它只读取本地 HTML，不抓取 URL：
-
-```bash
-npx --no-install jev-readability page.html --heuristic
-
-# 真实 JEV：先在当前 shell 中设置 TYPESAFE_API_KEY
-npx --no-install jev-readability page.html --mode documentation --format markdown --out result.md
-```
-
-`--url` 只用于页面元数据和相对链接解析。CLI 可输出 `markdown`、`text`、`html`、`json`；诊断信息写入 stderr，不污染 stdout 的提取结果。
-
-## 工作方式
+## How it works
 
 ```text
-HTML / 已渲染的 Document
-  → DOM 清理与不重叠切块
-  → JEV 批量判断 keep/drop 与内容角色
-  → 严格校验返回值
-  → 从原始 DOM 重组正文 / HTML / Markdown
+HTML / rendered Document
+  → clean and partition the DOM
+  → batch keep/drop and role questions to JEV
+  → validate typed decisions
+  → reconstruct original text / HTML / Markdown
 ```
 
-| 能力 | v0.1 行为 |
-| --- | --- |
-| 内容结构 | 标题、段落、代码、列表、引用、表格、图片说明 |
-| 提取策略 | `article`、`documentation`、`forum`、`product`、`agent` |
-| 模型请求 | 原生 TypeSafe `state + questions` 接口；长页分批，有限并发与重试 |
-| 可检查性 | 保留每块原文、保留判断、角色、概率和 `needsReview` |
-| 故障处理 | 默认抛错；只有显式设置 `fallback: 'heuristic'` 才降级并标记 |
-| 成本观测 | 请求/批次/字节计数、服务端返回的 token 用量；未知值保持 `null` |
+Short headings, code, lists, quotes, tables, and image captions remain candidate content. The pipeline supports bounded batches/concurrency/retries, cancellation, request limits, and explicit uncertainty handling. By default, uncertain blocks are kept and flagged; a classifier failure throws. Set `fallback: 'heuristic'` only when you deliberately want a labeled fallback.
 
-五种策略是不同的提取标准，不代表五种已经做过准确率评测的模型。JEV 的保留答案读取 `answers.keep_b0001.noul`，不是虚构的 `probability` 字段。参见 [TypeSafe API reference](https://docs.typesafe.ai/api)。
+JEV uses TypeSafe's native `state + questions` API, not Chat Completions. Its `noul` value is a model probability, not a calibrated guarantee of extraction correctness. `prepare()` → custom `Classifier` → `finalize()` lets you swap the decision layer without replacing DOM processing.
 
-## 浏览器与扩展
+## Browser and extension API
 
 ```ts
 import { extract, createRemoteClassifier } from 'jev-readability';
@@ -130,71 +143,42 @@ const result = await extract(document, {
 });
 ```
 
-`extract(document)` 克隆 DOM，不改原网页。`csrfToken` 应来自你自己的应用认证流程。**不要在浏览器代码里放 TypeSafe API Key**；后端接收候选块并调用 `createJevClassifier`。参考 [本地服务示例](./examples/server.mjs)，公开部署前须增加鉴权、配额、限流与输入保护。
+`extract(document)` clones the DOM instead of mutating the page. Supply `csrfToken` from your application's authentication flow. **Never embed a TypeSafe key in browser code.** Your backend handles authentication, quotas, and `createJevClassifier`; [the demo server](./examples/server.mjs) is loopback-only, not a production multi-tenant API.
 
-底层接口为 `prepare()` → 自定义 `Classifier` → `finalize()`，可以替换模型或加入自己的规则，而不改 DOM 提取逻辑。
+## CLI and configuration
 
-## 配置与返回值
+```bash
+# After installing this package and linkedom; no model calls
+npx --no-install jev-readability page.html --heuristic
 
-```ts
-const result = await extract(html, {
-  mode: 'article',
-  apiKey: process.env.TYPESAFE_API_KEY,
-  jev: {
-    model: 'jev-latest',
-    maxBlocksPerBatch: 24,
-    concurrency: 2,
-    timeoutMs: 20_000,
-    totalTimeoutMs: 90_000,
-    maxRequests: 64,
-    keepThreshold: 0.5,
-    uncertaintyMargin: 0.15,
-    onUncertain: 'keep',
-  },
-});
+# Real JEV: set TYPESAFE_API_KEY in your shell first
+npx --no-install jev-readability page.html --mode documentation --out result.md
 ```
 
-默认最多 2,000,000 个 HTML 字符、30,000 个 DOM 元素、500 个块。超限报错，不静默截断。长块只发送首尾样本，但保留时仍输出完整原文；采样和分批可能降低判断质量，结果会给出警告。这些是本库的工程保护值，不是 TypeSafe 的官方上下文上限。
+The CLI reads **local HTML files**, not remote URLs. `--url` supplies metadata and resolves relative links. Output formats are `markdown`, `text`, `html`, and `json`.
 
-结果含 `title`、`metadata`、`text`、`html`、`markdown`、`method`、`blocks`、`warnings`、`usage`、`stats`。详见 [完整指南](./docs/GUIDE.md) 和 [类型定义](./src/types.ts)。
+Node results include `title`, `metadata`, `text`, `html`, `markdown`, `method`, `blocks`, `warnings`, `usage`, and `stats`. Defaults limit HTML to 2,000,000 characters and 500 blocks; oversized input fails rather than silently dropping content. Long-block sampling preserves full source in output but may miss information during classification.
 
-## 边界与安全
+[Full configuration guide (中文)](https://github.com/hifizz/jev-readability/blob/main/docs/GUIDE.md) · [Type definitions](./src/types.ts) · [JEV options](./src/jev.ts)
 
-**这不是抓取服务。** 不包含 URL 抓取、JS 页面自动渲染、iframe/Shadow DOM 穿透、付费墙或登录绕过。SPA 需先提供渲染后的 DOM；只识别显式隐藏与部分内联样式，不分析外部 CSS 或视觉阅读顺序。
+## Limitations and safety
 
-**发送数据前需要授权。** 候选正文可能包含敏感内容；即使 URL 查询参数不进入模型 state，正文也不等于已脱敏。模型输出只决定取舍，不能替换原文；但仍不存在完整的提示注入防护。
+This is not a crawler, browser renderer, general sanitizer, or paywall bypass. It does not expand Shadow DOM/iframes or infer external-CSS visibility. Provide rendered DOM for SPAs.
 
-**HTML 输出不是通用 sanitizer。** 本库重建有限标签与属性，仍建议在最终展示边界使用成熟 sanitizer、CSP 和外部图片策略。`blocks` 包含被排除的原文；交给下游 Agent 时通常只传 `markdown` 或 `text`。
+Candidate text may contain private information; obtain authorization before sending it to TypeSafe. Prompt-injection defenses are limited. Apply a sanitizer, CSP, and an external-image policy before rendering output. Debug `blocks` include rejected source text; usually pass only `text` or `markdown` to downstream agents.
 
-## 开发与测试
+## Development and contribution
 
 ```bash
 npm install
 npm run check
-npm run build
 npm test
-
-# Node/linkedom 真实解析冒烟测试
-npm install --no-save --package-lock=false linkedom@0.18.12
 npm run test:node
-
-# Chromium DOM 与 UI 测试；另开终端先执行 npm run demo
-pip install playwright
-playwright install chromium
-npm run test:browser
-
-# 打包前自动编译；发布前自动类型检查、编译和单元测试
 npm pack --dry-run
 ```
 
-单元测试使用模拟 JEV 响应，不需要 API Key。CI 负责类型检查、协议单测、Node 解析冒烟检查及打包检查；具体历史执行证据与未验证项见 [测试报告](./docs/TEST_REPORT.md)。
-
-## 发布与贡献
-
-首次发布需要维护者完成 npm 登录；后续可配置 GitHub Actions 的 npm Trusted Publishing，避免长期 npm token。完整步骤、首次发布和版本更新方式见 [发布指南](./docs/PUBLISHING.md)。
-
-欢迎通过 [Issues](https://github.com/hifizz/jev-readability/issues) 提交真实网页案例，或通过 PR 改进提取策略与测试。提交案例前请去掉个人信息、私密页面与密钥；不要把模拟结果描述成真实 JEV benchmark。
+Browser checks require Playwright and a running demo; see the test report. Contribute sanitized, legally shareable page fixtures and independent gold labels through [Issues](https://github.com/hifizz/jev-readability/issues) or a PR. Real-page evaluation, authenticated JEV comparison, and measured latency/cost are the next validation milestones—not completed features.
 
 ## License
 
-[MIT](./LICENSE)。Mozilla Readability 与 TypeSafe JEV 的名称仅用于说明用途与兼容关系，不表示官方认可。
+[MIT](./LICENSE). Mozilla Readability and TypeSafe JEV are referenced descriptively; no affiliation or endorsement is implied.
