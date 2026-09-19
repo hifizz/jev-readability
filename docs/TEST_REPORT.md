@@ -1,56 +1,47 @@
-# v0.1.0 测试与发布检查
+# Tests, live evaluation and limitations
 
-本报告区分本地功能验证、外部 CI 和真实模型效果，避免把模拟响应或打包成功当作模型验证、发布成功。
+[English README](../README.md) · [简体中文](../README.zh-CN.md)
 
-## 本次本地执行结果
+## Latest verified engineering checks
 
-环境：Node.js v22.16.0、TypeScript 5.8.3、Linux Chromium + Python Playwright。
+On source `103a72dac82a8ad9a812428bf08a9017ca0268f3`, the [live evaluation job](https://github.com/hifizz/jev-readability/actions/runs/35465401579/job/105956692603) passed **60 Node tests**, strict TypeScript checking, build, and Node/linkedom integration before the API step. Node was `v22.23.2`; TypeScript `5.8.3` and linkedom `0.18.12` are project development dependencies.
 
-| 项目 | 结果 | 范围 |
-| --- | --- | --- |
-| `npm run check` | 通过 | 严格 TypeScript 类型检查 |
-| `npm run build` | 通过 | ESM、类型声明和 source map 编译 |
-| `npm test` | 34 / 34 通过 | 30 项协议/重试/判断测试 + 4 项 npm 包配置与入口检查 |
-| Chromium DOM 测试 | 32 / 32 通过 | 分块、原文重组、短标题/代码/表格、边界和取消处理 |
-| UI 操作检查 | 8 / 8 通过 | 示例提取、结果标签、无 key 提示、移动端无横向溢出 |
-| `npm pack --dry-run` | 通过 | 文件白名单、已编译入口、CLI、文档，无密钥文件 |
-| `npm publish --access public` | 未成功：`ENEEDAUTH` | 已运行发布前检查；当前环境没有 npm 身份认证 |
+The subsequent manual-trigger cleanup source `99c260c10ce30dcf60292ed7abcdb24a6fb174f3` also passed the [Node 22/24 CI matrix](https://github.com/hifizz/jev-readability/actions/runs/35465679259) and [synthetic baseline workflow](https://github.com/hifizz/jev-readability/actions/runs/35465679263).
 
-DOM/UI 检查使用真实 Chromium，通过 `python test/run-browser.py --offline` 在内存中加载编译后的模块，模拟 fixture/config 的网络响应。**这不是浏览器 → 本地后端 → 真实 JEV 的端到端测试。** 测试脚本会将 JSON 结果与截图写入 `test-artifacts/`；该目录不提交源码或 npm 包。
+Tests include typed response validation, timeout/cancellation/retry bounds, package entry points, metric denominators, missing usage, pinned model checking, opt-in large-page validation, cross-region duplicate IDs, unchanged small-page batches, all-region request limits, 1,201 candidate IDs in order, and reconstruction of 601 original DOM blocks via the Node entry point.
 
-较早的 Demo 交付曾记录 10 项本地 HTTP 检查；本次发布准备没有重新执行这组检查，不把历史结果冒充新增验证。
+Model responses in unit tests are mocked. Passing them does not prove extraction quality.
 
-## 外部 CI
+## Latest real JEV comparison
 
-`.github/workflows/ci.yml` 配置 Node 22 / 24 的类型检查、单元测试、安装 `linkedom@0.18.12` 后的真实 Node 解析冒烟检查，以及 npm 打包检查。以仓库 Actions 的实际结果为准，工作流文件存在不等于检查已通过。
+The 140-page Typed/Generic run attempted all **420 engine/page combinations**. Readability and Generic completed 140/140 without exceptions; Typed completed 139/140. Typed page 4035 hit a request timeout. The workflow correctly failed after saving every row, the summary and artifact. This is not a green end-to-end result.
 
-CI 最后只读查询 npm registry，输出 `REGISTRY_STATUS`，用于区分尚无可见包、已发布版本与网络/服务错误；它不会发布包。
+Page 4351, which previously exceeded 500 blocks, completed under both variants using 507 candidates partitioned into 2 structural regions. The recovered extraction still has content errors. See [full benchmark methodology and results](./WCXB_BENCHMARK.md), including correction of the previous failed-page denominator bug and sensitivity to two empty SPA references.
 
-## 尚未验证
+## Historical browser evidence, not rerun in this change
 
-- 真实 JEV 成功调用、模型准确率、延迟和实际账单成本：没有可用 API Key，协议测试使用模拟 HTTP 响应。
-- 本地 Node/linkedom 解析运行：本环境未安装这个可选依赖，交由外部 CI 的 `npm run test:node` 验证。
-- 真实网页与 Mozilla Readability 对照评测、生产安全审计、复杂页面结构与多租户部署。
-- npm registry 首次发布：需要维护者认证及包名权限，打包成功不能证明发布成功。
+The initial demo delivery recorded 32 Chromium DOM checks, 8 UI checks and 10 local HTTP checks. DOM/UI tests used a real Chromium DOM with in-memory module loading and simulated local fixture/config fetches under the environment's browser-network constraints. Those results are not a newly executed browser-to-server-to-JEV test for the latest changes.
 
-## 复现
+## Reproduce
 
 ```bash
 npm install
 npm run check
-npm run build
 npm test
-npm install --no-save --package-lock=false linkedom@0.18.12
 npm run test:node
 npm pack --dry-run
 
-# Chromium DOM / UI：先在另一个终端启动 npm run demo
+# Browser checks: start npm run demo in another terminal first
 pip install playwright
 playwright install chromium
 npm run test:browser
 
-# 无浏览器网络的本地测试模式
+# Restricted-network historical test mode
 python test/run-browser.py --offline
 ```
 
-不得根据这些功能测试宣传 JEV 比 Readability 更准、更快或更便宜。先构建真实网页标注集，再做独立质量与成本评测。
+For paid evaluation, use **Actions → WCXB Typed vs Generic**, with the existing `TYPESAFE_API_KEY` repository secret. Current WCXB workflows are manual-only. For old report correction without model calls, run `node benchmark/recalculate.mjs original.json corrected.json`.
+
+## Still unverified
+
+No production security audit, broad browser compatibility guarantee, browser-to-server-to-model regression suite for the latest changes, independent fresh holdout, repeated-model stability experiment or actual invoice reconciliation is claimed. Transitive package dependencies are not locked. The library package version was not published or bumped as part of this benchmark work.
