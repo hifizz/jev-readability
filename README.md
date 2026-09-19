@@ -14,9 +14,27 @@ A **semantic content extractor for AI agents**. Mozilla Readability is optimized
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
 
-[Quick start](#quick-start) · [Readability comparison](#comparison-with-mozilla-readability) · [Evaluation](#evaluation) · [Large pages](#large-pages) · [Browser API](#browser-and-extension-api)
+[Benchmark](#benchmark-at-a-glance) · [Quick start](#quick-start) · [Readability migration](#for-mozilla-readability-users) · [Full evaluation](#evaluation) · [Large pages](#large-pages)
 
 > **Experimental development version.** Independent community project, not an official Mozilla or TypeSafe product. The latest 140-page WCXB comparison includes real JEV calls and a recorded timeout. Results are specific to this public, previously examined cohort; they are not universal accuracy guarantees.
+
+## Benchmark at a glance
+
+**140 real-world WCXB pages · 7 page types · real JEV API calls**
+
+| Engine | Word precision | Word recall | Word F1 | Anchor F1 |
+| --- | ---: | ---: | ---: | ---: |
+| Mozilla Readability `0.6.0` | **80.62%** | 74.01% | 72.68% | 79.13% |
+| JEV Typed | 72.86% | **94.93%** | 79.90% | 92.99% |
+| **JEV Generic `agent`** | 74.08% | 94.76% | **80.64%** | **93.01%** |
+
+**How to read this:** Readability is more precise and remains excellent on article pages. JEV is much more recall-oriented: it keeps more of the information that appears in the benchmark ground truth, which is useful when missing a warning, forum reply, spec table, code block or listing item is more costly than retaining a little extra text.
+
+The Generic JEV run receives **no supplied page-type label**; every page uses the same `agent` mode. On this fixed cohort, Generic JEV's Word F1 is **+7.95 percentage points** over Readability. A paired, page-type-stratified bootstrap gives a 95% interval of **+3.49 to +12.50 pp** for that observed difference.
+
+This is **not** a claim that JEV is universally better. The dataset is public and previously inspected, page types are equally weighted rather than web-prevalence weighted, one Typed run timed out, and model/API cost and latency are materially higher than local Readability. Article-only pages still favor Readability in this run: **97.12% vs 94.92% Word F1**.
+
+[Read the full benchmark report](./docs/WCXB_BENCHMARK.md) · [140 per-page scores](./docs/benchmarks/wcxb-ablation-pages.tsv) · [Summary JSON](./docs/benchmarks/wcxb-ablation-summary.json) · [GitHub Actions run](https://github.com/hifizz/jev-readability/actions/runs/35465401579)
 
 ## Quick start
 
