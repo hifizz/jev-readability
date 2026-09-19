@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
-  <title id="title">jev-readability — Find the content. Keep the original.</title>
+  <title id="title">jev-readability — Read webpages like an agent, not a reader.</title>
   <desc id="desc">DOM-first extraction with JEV decisions. An illustrative document highlights original content and excludes navigation and promotional blocks. No benchmark results are depicted.</desc>
   <rect width="1280" height="420" rx="24" fill="#f5f3ec"/>
   <rect x="1" y="1" width="1278" height="418" rx="23" fill="none" stroke="#dedfd5"/>
@@ -9,32 +9,32 @@
     <rect x="58" y="49" width="34" height="34" rx="9" fill="#254b3f"/>
     <path d="M70 59l-6 7 6 7m10-14l6 7-6 7" fill="none" stroke="#f5f3ec" stroke-width="2"/>
     <text x="106" y="74" font-size="25" font-weight="700" fill="#254b3f">jev-readability</text>
-    <text x="58" y="150" font-family="Georgia, 'Times New Roman', serif" font-size="56" fill="#203e33">Find the content.</text>
-    <text x="58" y="215" font-family="Georgia, 'Times New Roman', serif" font-size="56" fill="#203e33">Keep the original.</text>
-    <text x="60" y="266" font-size="21" fill="#637268">DOM-first extraction. JEV-powered decisions.</text>
+    <text x="58" y="150" font-family="Georgia, 'Times New Roman', serif" font-size="56" fill="#203e33">Read webpages like</text>
+    <text x="58" y="215" font-family="Georgia, 'Times New Roman', serif" font-size="56" fill="#203e33">an agent, not a reader.</text>
+    <text x="60" y="266" font-size="21" fill="#637268">Semantic content extraction for AI agents.</text>
     <rect x="58" y="306" width="111" height="32" rx="16" fill="#e3e8de"/>
     <text x="113" y="328" text-anchor="middle" font-size="15" fill="#365444">TypeScript</text>
     <rect x="181" y="306" width="183" height="32" rx="16" fill="#e3e8de"/>
     <text x="272" y="328" text-anchor="middle" font-size="15" fill="#365444">HTML → Markdown</text>
-    <text x="60" y="382" font-size="15" fill="#728074">For readers, RAG pipelines, and AI agents.</text>
+    <text x="60" y="382" font-size="15" fill="#728074">For agents, RAG pipelines, and local web workflows.</text>
     <rect x="737" y="50" width="468" height="320" rx="18" fill="#ffffff" stroke="#d8ded4"/>
     <circle cx="760" cy="72" r="4" fill="#c7d1c3"/>
     <circle cx="775" cy="72" r="4" fill="#c7d1c3"/>
     <circle cx="790" cy="72" r="4" fill="#c7d1c3"/>
-    <text x="1181" y="77" text-anchor="end" font-size="13" fill="#7a867a">Your page → original content</text>
+    <text x="1181" y="77" text-anchor="end" font-size="13" fill="#7a867a">Your page → agent-ready content</text>
     <path d="M737 92h468" stroke="#e5e9e0"/>
     <rect x="758" y="110" width="426" height="35" rx="7" fill="#f2f3ef"/>
     <text x="775" y="133" font-size="15" fill="#8b9489">Navigation</text>
     <text x="1164" y="133" text-anchor="end" font-size="13" fill="#8b9489">drop</text>
     <rect x="758" y="157" width="426" height="108" rx="9" fill="#edf3e9" stroke="#b1c8ac"/>
     <rect x="758" y="164" width="4" height="94" rx="2" fill="#406e50"/>
-    <text x="775" y="184" font-size="17" font-weight="700" fill="#2d573d">Article content</text>
+    <text x="775" y="184" font-size="17" font-weight="700" fill="#2d573d">Useful page content</text>
     <text x="1164" y="184" text-anchor="end" font-size="13" fill="#2d573d">keep</text>
     <path d="M777 203h312m-312 16h354m-354 16h251" stroke="#b9cbb2" stroke-width="5" stroke-linecap="round"/>
     <rect x="758" y="278" width="426" height="35" rx="7" fill="#f2f3ef"/>
     <text x="775" y="301" font-size="15" fill="#8b9489">Promotional block</text>
     <text x="1164" y="301" text-anchor="end" font-size="13" fill="#8b9489">drop</text>
-    <text x="972" y="344" text-anchor="middle" font-size="14" fill="#4a6b52">Select the source. Don't rewrite it.</text>
+    <text x="972" y="344" text-anchor="middle" font-size="14" fill="#4a6b52">Keep what matters. Preserve the source.</text>
     <text x="1186" y="397" text-anchor="end" font-size="12" fill="#81907d">Independent community project · v0.1</text>
   </g>
 </svg>
