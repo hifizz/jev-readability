@@ -10,6 +10,7 @@
 
 一个面向 **AI Agent 的语义内容提取器**。Mozilla Readability 的目标是把文章变成干净的 Reader View；jev-readability 的目标是跨文档、论坛、商品页、列表页和长页面，**尽量不漏掉 Agent 完成任务所需要的信息**。它先对 DOM 分块，再让 TypeSafe JEV 判断哪些内容该保留，最后从原始页面重组 **Markdown、正文和 HTML**——模型只做选择，不改写原文。
 
+[![npm](https://img.shields.io/npm/v/jev-readability)](https://www.npmjs.com/package/jev-readability)
 [![CI](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml)
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)

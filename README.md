@@ -10,6 +10,7 @@
 
 A **semantic content extractor for AI agents**. Mozilla Readability is optimized for turning articles into clean reader views; jev-readability is optimized for **not missing information an agent may need** across documentation, forums, products, listings and long pages. It partitions the DOM, lets TypeSafe JEV decide what belongs, and reconstructs **Markdown, text and HTML from the original source** — the model selects content, it does not rewrite it.
 
+[![npm](https://img.shields.io/npm/v/jev-readability)](https://www.npmjs.com/package/jev-readability)
 [![CI](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/ci.yml)
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
