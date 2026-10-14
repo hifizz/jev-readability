@@ -56,13 +56,11 @@ npm run demo
 
 ### 安装到项目
 
-从 GitHub 安装当前开发代码：
-
 ```bash
-npm install github:hifizz/jev-readability linkedom
+npm install jev-readability linkedom
 ```
 
-本包为 ESM，附带 TypeScript 类型。Node 的 HTML 字符串入口需要 `linkedom`，浏览器核心不需要。GitHub 安装通过 `prepare` 编译源码，不应禁用这条路径的安装脚本。npm 发布步骤见[发布指南](./docs/PUBLISHING.md)；本次评测提交本身不会发布新 npm 版本。
+本包为 ESM，附带 TypeScript 类型。Node 的 HTML 字符串入口需要 `linkedom`，浏览器核心不需要。如需跟踪未发布的开发代码，可改用 `npm install github:hifizz/jev-readability linkedom`；GitHub 安装通过 `prepare` 编译源码，不应禁用这条路径的安装脚本。
 
 ```js
 import { readFile } from 'node:fs/promises';

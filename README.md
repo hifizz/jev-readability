@@ -56,13 +56,11 @@ The default **local heuristic** is offline and makes no model calls. It is a dev
 
 ### Install in your project
 
-Install the current development code from GitHub:
-
 ```bash
-npm install github:hifizz/jev-readability linkedom
+npm install jev-readability linkedom
 ```
 
-The package is ESM with TypeScript declarations. `linkedom` is required by the Node HTML-string entry point, not by the browser core. GitHub installs compile through `prepare`; do not disable lifecycle scripts for this path. Registry release instructions are in the [publishing guide](https://github.com/hifizz/jev-readability/blob/main/docs/PUBLISHING.md); these benchmark commits do not themselves publish an npm version.
+The package is ESM with TypeScript declarations. `linkedom` is required by the Node HTML-string entry point, not by the browser core. To track unreleased development code instead, install `github:hifizz/jev-readability` — GitHub installs compile through `prepare`; do not disable lifecycle scripts for that path.
 
 ```js
 import { readFile } from 'node:fs/promises';
