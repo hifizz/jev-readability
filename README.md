@@ -15,7 +15,7 @@ A **semantic content extractor for AI agents**. Mozilla Readability is optimized
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
 
-[Benchmark](#benchmark-at-a-glance) · [Quick start](#quick-start) · [Readability migration](#for-mozilla-readability-users) · [Full evaluation](#evaluation) · [Large pages](#large-pages)
+[Benchmark](#benchmark-at-a-glance) · [Quick start](#quick-start) · [Agent prompt](#let-your-coding-agent-integrate-it) · [Readability migration](#for-mozilla-readability-users) · [Full evaluation](#evaluation) · [Large pages](#large-pages)
 
 > **Experimental development version.** Independent community project, not an official Mozilla or TypeSafe product. The latest 140-page WCXB comparison includes real JEV calls and a recorded timeout. Results are specific to this public, previously examined cohort; they are not universal accuracy guarantees.
 
@@ -80,6 +80,25 @@ console.log(result.usage);
 Save as `extract.mjs`, configure `.env` and run `node --env-file=.env extract.mjs`. Use `{ strategy: 'heuristic' }` for an offline baseline; its model probabilities remain `null`.
 
 The modes are `article`, `documentation`, `forum`, `product` and `agent`. Use `agent` when no page-type hint is available. The default library mode remains `article`; the example's explicit mode does not change that default.
+
+## Let your coding agent integrate it
+
+Paste this prompt into your coding agent (Devin, Claude Code, Cursor, …) to wire up the integration:
+
+```text
+Integrate the `jev-readability` npm package into this project for webpage content extraction.
+
+Facts you need:
+- Install: `npm install jev-readability linkedom`. ESM-only, Node >= 22. `linkedom` is required only by the Node HTML-string entry; browser/DOM use needs no dependency.
+- Node entry: `import { extract } from 'jev-readability/node'` → `await extract(htmlString, { url, mode, apiKey })`.
+- Browser entry: `import { extract } from 'jev-readability'` → `await extract(document, { mode, classifier })`.
+- Modes: 'article' | 'documentation' | 'forum' | 'product' | 'agent'. Use 'agent' when the page type is unknown; the library default is 'article'.
+- Model inference needs TYPESAFE_API_KEY (env var or the `apiKey` option). `{ strategy: 'heuristic' }` is a fully offline baseline that needs no key — use it for tests.
+- Result: `{ title, metadata, text, html, markdown, method, blocks, warnings, usage, stats }`. Downstream agents usually want `markdown`.
+- CLI: `npx --no-install jev-readability page.html --heuristic`.
+
+Task: find where this project fetches or parses web pages (or where an agent consumes HTML), add extraction there, and leave a small runnable example. Ask me before changing unrelated code.
+```
 
 ## For Mozilla Readability users
 

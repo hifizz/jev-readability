@@ -15,7 +15,7 @@
 [![Baseline](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml/badge.svg)](https://github.com/hifizz/jev-readability/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-315846)](./LICENSE)
 
-[评测结果](#评测结果一览) · [快速开始](#快速开始) · [Readability 迁移](#给-mozilla-readability-用户) · [完整评测](#评测结果) · [大页面](#大页面)
+[评测结果](#评测结果一览) · [快速开始](#快速开始) · [接入提示词](#让-coding-agent-帮你接入) · [Readability 迁移](#给-mozilla-readability-用户) · [完整评测](#评测结果) · [大页面](#大页面)
 
 > **实验性开发版本。** 独立社区项目，非 Mozilla 或 TypeSafe 官方产品。最新 140 页 WCXB 对照使用真实 JEV，并保留了一次超时。结果仅适用于这批公开、已检查过的页面，不能泛化为所有网页的准确率承诺。
 
@@ -80,6 +80,25 @@ console.log(result.usage);
 保存为 `extract.mjs`，配置 `.env` 后执行 `node --env-file=.env extract.mjs`。离线基线使用 `{ strategy: 'heuristic' }`，模型概率保持 `null`。
 
 可选模式：`article`、`documentation`、`forum`、`product`、`agent`。没有页面类型信息时可显式使用 `agent`。**库的默认模式仍为 `article`**，不会因为示例改用 agent 而隐式改变已有调用。
+
+## 让 Coding Agent 帮你接入
+
+把下面这段提示词粘贴给你的 Coding Agent（Devin、Claude Code、Cursor 等），让它完成接入：
+
+```text
+把 `jev-readability` 这个 npm 包接入到当前项目中，用于网页正文/内容提取。
+
+你需要知道的事实：
+- 安装：`npm install jev-readability linkedom`。仅 ESM，Node >= 22。`linkedom` 只有 Node 的 HTML 字符串入口需要；浏览器/DOM 用法不需要依赖。
+- Node 入口：`import { extract } from 'jev-readability/node'` → `await extract(htmlString, { url, mode, apiKey })`。
+- 浏览器入口：`import { extract } from 'jev-readability'` → `await extract(document, { mode, classifier })`。
+- 模式：'article' | 'documentation' | 'forum' | 'product' | 'agent'。页面类型未知时用 'agent'；库默认是 'article'。
+- 模型推理需要 TYPESAFE_API_KEY（环境变量或 `apiKey` 选项）。`{ strategy: 'heuristic' }` 是完全离线的基线，不需要密钥，测试用它。
+- 返回：`{ title, metadata, text, html, markdown, method, blocks, warnings, usage, stats }`。下游 Agent 一般要的是 `markdown`。
+- CLI：`npx --no-install jev-readability page.html --heuristic`。
+
+任务：找到这个项目里抓取/解析网页（或把 HTML 喂给 Agent）的位置，把提取步骤接进去，并留一个可以直接运行的小示例。改动无关代码之前先问我。
+```
 
 ## 给 Mozilla Readability 用户
 
