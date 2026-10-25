@@ -2,6 +2,7 @@
 const ALLOWED = new Set('p div section article header footer h1 h2 h3 h4 h5 h6 a strong b em i u s del sub sup span small mark time abbr br hr pre code kbd samp ul ol li dl dt dd blockquote figure figcaption img table caption thead tbody tfoot tr th td'.split(' '));
 export const DROP = 'script,style,noscript,template,iframe,object,embed,svg,math,canvas,input,button,textarea,select,option,link,meta,base';
 const DROP_TAGS = new Set(DROP.split(','));
+const OL_START = /^-?\d{1,5}$/;
 const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = (s: string) => escapeText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 export const compact = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -53,7 +54,7 @@ export function renderHtml(node: Node, base?: string | null): string {
   }
   if (tag === 'ol') {
     const value = el.getAttribute('start');
-    if (value && /^-?\d{1,5}$/.test(value)) add('start', value);
+    if (value && OL_START.test(value)) add('start', value);
   }
   return `<${tag}${attrs.join('')}>${['br', 'hr', 'img'].includes(tag) ? '' : inner() + `</${tag}>`}`;
 }
@@ -113,7 +114,10 @@ export function renderMarkdown(node: Node, base?: string | null, depth = 0): str
   if (tag === 'hr') return '\n\n---\n\n';
   if (tag === 'blockquote') return '\n\n' + children().trim().split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
   if (tag === 'ul' || tag === 'ol') {
-    const start = Number(el.getAttribute('start') || 1);
+    // A malformed or non-decimal start attribute falls back to 1 rather than
+    // producing NaN or hexadecimal/exponential numbering, matching renderHtml.
+    const raw = el.getAttribute('start');
+    const start = tag === 'ol' && raw !== null && OL_START.test(raw) ? +raw : 1;
     return '\n' + Array.from(el.children).filter(e => e.tagName.toLowerCase() === 'li').map((li, i) => {
       const body = Array.from(li.childNodes, child => renderMarkdown(child, base, depth + 1)).join('').trim();
       const prefix = tag === 'ol' ? `${start + i}. ` : '- ';
